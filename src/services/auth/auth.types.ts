@@ -46,6 +46,7 @@ export interface SessionUser {
   org_id?: string;
   role: UserRole;
   is_active: boolean;
+  force_password_change?: boolean;
   geographic_area?: GeographicArea;
   email_verified: boolean;
   created_at: string;

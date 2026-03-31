@@ -1,4 +1,6 @@
 .env
 node_modules/
-UNITE/
+UNITE_SAMPLE/
+unite-frontend-enterprise-prototype/
+
 

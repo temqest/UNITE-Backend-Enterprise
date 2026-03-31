@@ -45,6 +45,8 @@ export type PermissionName = (typeof PERMISSION_CATALOG)[number];
 
 const LEGACY_PERMISSION_MAP: Record<string, string> = {
   approve_staff: 'users.approve',
+  manage_staff: 'users.invite',
+  manage_users: 'users.invite',
   manage_org_settings: 'settings.update',
   manage_events: 'events.update',
   approve_events: 'events.approve',

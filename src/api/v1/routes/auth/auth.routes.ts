@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import {
-  loginController,
-} from '../../controllers/auth/login.controller';
-import { meController } from '../../controllers/auth/me.controller';
+import { loginController } from '../../controllers/auth/login.controller';
 import { logoutController } from '../../controllers/auth/logout.controller';
+import { meController } from '../../controllers/auth/me.controller';
 import { resendOtpController } from '../../controllers/auth/resend-otp.controller';
 import { verifyOtpController } from '../../controllers/auth/verify-otp.controller';
-import { validateLogin, validateResendOtp, validateVerifyOtp } from '../../validators/auth';
+import { changePasswordController, forgotPasswordController } from '../../controllers/auth/password.controller';
+import { validateChangePassword, validateForgotPassword, validateLogin, validateResendOtp, validateVerifyOtp } from '../../validators/auth';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
 import { requireActiveUser } from '../../../../middelware/authorization.middleware';
 import { authLoginRateLimiter, authOtpRateLimiter } from '../../../../middelware/rate-limit.middleware';
@@ -47,8 +46,10 @@ const authRouter = Router();
 authRouter.post('/login', authLoginRateLimiter, validateMiddleware(toValidator(validateLogin)), asyncHandler(loginController as any));
 authRouter.post('/verify-otp', authOtpRateLimiter, validateMiddleware(toValidator(validateVerifyOtp)), asyncHandler(verifyOtpController as any));
 authRouter.post('/resend-otp', authOtpRateLimiter, validateMiddleware(toValidator(validateResendOtp)), asyncHandler(resendOtpController as any));
+authRouter.post('/forgot-password', validateMiddleware(toValidator(validateForgotPassword)), asyncHandler(forgotPasswordController as any));
 authRouter.get('/me', authMiddleware, requireActiveUser, asyncHandler(meController as any));
 authRouter.post('/logout', authMiddleware, requireActiveUser, asyncHandler(logoutController as any));
+authRouter.post('/change-password', authMiddleware, requireActiveUser, validateMiddleware(toValidator(validateChangePassword)), asyncHandler(changePasswordController as any));
 
 export { authRouter };
 export default authRouter;

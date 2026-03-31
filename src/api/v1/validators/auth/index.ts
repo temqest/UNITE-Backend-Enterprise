@@ -25,3 +25,15 @@ export {
   validateResendOtp,
   type ResendOtpInput,
 } from './resend-otp.validator';
+
+export {
+  forgotPasswordSchema,
+  validateForgotPassword,
+  type ForgotPasswordInput,
+} from './forgot-password.validator';
+
+export {
+  changePasswordSchema,
+  validateChangePassword,
+  type ChangePasswordInput,
+} from './change-password.validator';

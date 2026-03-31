@@ -27,3 +27,18 @@ export {
   validateGetProfile,
   type GetProfileInput,
 } from './get-profile.validator';
+
+export {
+  userIdParamSchema,
+  staffListQuerySchema,
+  staffCreateSchema,
+  staffUpdateSchema,
+  validateUserIdParam,
+  validateStaffListQuery,
+  validateStaffCreate,
+  validateStaffUpdate,
+  type UserIdParamInput,
+  type StaffListQueryInput,
+  type StaffCreateInput,
+  type StaffUpdateInput,
+} from './staff-management.validator';

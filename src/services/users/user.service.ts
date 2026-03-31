@@ -120,7 +120,7 @@ const AdminCreateStaffSchemaBase = z.object({
     }),
     geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
     send_invite_email: z.boolean().optional(),
-    temporary_password: z.string().min(8).max(128).optional(),
+    temporary_password: z.string().min(6).max(128).optional(),
   });
 
 const AdminCreateStaffSchema = AdminCreateStaffSchemaBase
