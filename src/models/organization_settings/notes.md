@@ -1,0 +1,25 @@
+# organization_settings notes
+
+- Purpose: one row per organization for global blood bank operating restrictions.
+- Multi-tenancy: `org_id` is mandatory and unique (`organization_settings_org_id_unique`), enforcing one settings row per org.
+- Event restriction defaults:
+  - `max_blood_bags_per_day = 100`
+  - `max_events_per_day = 5`
+  - `event_request_advance_days = 3`
+  - `prevent_double_booking_same_day = true`
+  - `allow_weekend_events = false`
+  - `banned_days_of_week = []`
+  - `banned_specific_dates = []`
+- Validation guarantees:
+  - `banned_days_of_week` must be a JSON array of integers from 0 to 6.
+  - `banned_specific_dates` must be a JSON array of valid ISO date strings (`YYYY-MM-DD`).
+  - `config` must be a JSON object for future extension.
+- RLS behavior:
+  - SELECT: any authenticated user can read only their own org settings.
+  - INSERT/UPDATE: restricted to active users with `role.type = super_admin` in the same org.
+  - DELETE: restricted to same-org `super_admin` or `service_role` token.
+- App-layer enforcement recommendations:
+  - Enforce business checks (advance booking days, weekend/blocked days, per-day limits, duplicate participant prevention) in event service logic before writes.
+  - Cache settings per org for request-time validation, with short TTL or cache-busting on settings update.
+- Future extension:
+  - Add feature flags and operational limits into `config` while keeping high-value query fields as explicit columns.

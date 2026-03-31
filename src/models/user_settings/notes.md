@@ -1,0 +1,21 @@
+# user_settings notes
+
+- Purpose: one row per app user for personal notification preferences.
+- Multi-tenancy:
+  - `org_id` is mandatory for tenant isolation.
+  - `user_id` is unique (`user_settings_user_id_unique`) to enforce one settings row per user.
+  - Trigger `validate_user_settings_org_match` guarantees the selected `user_id` belongs to the same `org_id`.
+- Notification preference defaults:
+  - `enable_email_notifications = true`
+  - `enable_in_app_notifications = true`
+  - `enable_all_notifications = true`
+- `preferences` is JSONB for extensible per-user options and must be a JSON object.
+- RLS behavior:
+  - SELECT: users can read only their own row (`user_id = current_user_profile_id()`) in their own org.
+  - INSERT: users can create only their own row.
+  - UPDATE: users can update only their own row.
+  - DELETE: restricted to same-org `super_admin` or `service_role` token.
+- App-layer enforcement recommendations:
+  - Respect `enable_all_notifications` as the first gate before channel-specific toggles.
+  - Keep delivery transport preferences (email address/endpoint details) in separate secure profile tables.
+  - Use idempotent upsert (`on conflict (user_id) do update`) when initializing defaults during user onboarding.

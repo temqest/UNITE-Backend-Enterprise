@@ -1,0 +1,291 @@
+import { randomBytes, createHash } from 'crypto';
+import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
+  GeographicArea,
+  UserRole,
+  UserRow,
+} from '../../models/users/types';
+
+export interface ServiceError {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+export interface ServiceResult<T> {
+  data: T | null;
+  error: ServiceError | null;
+}
+
+export interface InviteCreateInput {
+  org_id: string;
+  email: string;
+  role: UserRole;
+  geographic_area?: GeographicArea | null;
+  expires_in_hours?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InviteConsumeInput {
+  token: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface InviteRecord {
+  id: string;
+  org_id: string;
+  email: string;
+  role: UserRole;
+  geographic_area: GeographicArea | null;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by_auth_id: string | null;
+  created_by_user_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+const InviteCreateSchema = z.object({
+  org_id: z.string().uuid(),
+  email: z.string().email(),
+  role: z.object({
+    type: z.string().min(1),
+    permissions: z.array(z.string()).default([]),
+  }),
+  geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
+  expires_in_hours: z.number().int().min(1).max(720).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const InviteConsumeSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8).max(128),
+  first_name: z.string().trim().min(1),
+  last_name: z.string().trim().min(1),
+});
+
+function toServiceError(code: string, message: string, details?: unknown): ServiceError {
+  return { code, message, details };
+}
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function generateToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+export class InvitesService {
+  constructor(private readonly supabase: SupabaseClient) {}
+
+  private async getRequesterByAuthId(authId: string): Promise<ServiceResult<UserRow>> {
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('auth_id', authId)
+      .single();
+
+    if (error) {
+      return {
+        data: null,
+        error: toServiceError('REQUESTER_LOOKUP_FAILED', 'Failed to resolve requester.', error),
+      };
+    }
+
+    return { data: data as UserRow, error: null };
+  }
+
+  async createInvite(
+    requesterAuthId: string,
+    input: InviteCreateInput
+  ): Promise<ServiceResult<{ invite: InviteRecord; token: string; invite_url: string }>> {
+    try {
+      const parsed = InviteCreateSchema.parse(input);
+
+      const requesterResult = await this.getRequesterByAuthId(requesterAuthId);
+      if (requesterResult.error) {
+        return { data: null, error: requesterResult.error };
+      }
+
+      const requester = requesterResult.data;
+      if (!requester || requester.org_id !== parsed.org_id) {
+        return {
+          data: null,
+          error: toServiceError('FORBIDDEN', 'Requester does not belong to the target organization.'),
+        };
+      }
+
+      if (requester.role.type !== 'super_admin' || !requester.is_active) {
+        return {
+          data: null,
+          error: toServiceError('FORBIDDEN', 'Only active super_admin can create invites.'),
+        };
+      }
+
+      if (parsed.role.type === 'super_admin') {
+        return {
+          data: null,
+          error: toServiceError('INVALID_ROLE', 'Invite flow cannot create another super_admin.'),
+        };
+      }
+
+      const token = generateToken();
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + (parsed.expires_in_hours ?? 72));
+
+      const { data, error } = await this.supabase
+        .from('invites')
+        .insert({
+          org_id: parsed.org_id,
+          email: parsed.email.toLowerCase(),
+          role: parsed.role,
+          geographic_area: parsed.geographic_area ?? null,
+          token_hash: tokenHash,
+          expires_at: expiresAt.toISOString(),
+          used_at: null,
+          used_by_auth_id: null,
+          created_by_user_id: requester.id,
+          metadata: {
+            pre_approved: true,
+            ...(parsed.metadata ?? {}),
+          },
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        return {
+          data: null,
+          error: toServiceError('INVITE_CREATE_FAILED', 'Failed to create invite.', error),
+        };
+      }
+
+      const inviteUrl = `https://app.example.com/invite/accept?token=${token}`;
+      return {
+        data: {
+          invite: data as InviteRecord,
+          token,
+          invite_url: inviteUrl,
+        },
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('INVITE_CREATE_VALIDATION_ERROR', 'Invalid invite payload.', error),
+      };
+    }
+  }
+
+  async consumeInviteAndSignup(
+    input: InviteConsumeInput
+  ): Promise<ServiceResult<{ user: UserRow; invite: InviteRecord }>> {
+    try {
+      const parsed = InviteConsumeSchema.parse(input);
+      const tokenHash = hashToken(parsed.token);
+
+      const { data: inviteData, error: inviteError } = await this.supabase
+        .from('invites')
+        .select('*')
+        .eq('token_hash', tokenHash)
+        .is('used_at', null)
+        .single();
+
+      if (inviteError || !inviteData) {
+        return {
+          data: null,
+          error: toServiceError('INVITE_INVALID', 'Invite token is invalid or already used.', inviteError),
+        };
+      }
+
+      const invite = inviteData as InviteRecord;
+      if (new Date(invite.expires_at).getTime() < Date.now()) {
+        return {
+          data: null,
+          error: toServiceError('INVITE_EXPIRED', 'Invite token has expired.'),
+        };
+      }
+
+      const signUpResult = await this.supabase.auth.signUp({
+        email: invite.email,
+        password: parsed.password,
+        options: {
+          emailRedirectTo: 'https://app.example.com/auth/callback',
+          data: {
+            org_id: invite.org_id,
+            signup_source: 'invite_portal',
+          },
+        },
+      });
+
+      if (signUpResult.error || !signUpResult.data.user) {
+        return {
+          data: null,
+          error: toServiceError(
+            'AUTH_SIGNUP_FAILED',
+            'Failed to create auth account from invite.',
+            signUpResult.error
+          ),
+        };
+      }
+
+      const authUser = signUpResult.data.user;
+      const { data: userData, error: userError } = await this.supabase
+        .from('users')
+        .insert({
+          org_id: invite.org_id,
+          auth_id: authUser.id,
+          email: invite.email,
+          first_name: parsed.first_name,
+          last_name: parsed.last_name,
+          role: invite.role,
+          geographic_area: invite.geographic_area,
+          is_active: true,
+        })
+        .select('*')
+        .single();
+
+      if (userError || !userData) {
+        return {
+          data: null,
+          error: toServiceError('USER_CREATE_FAILED', 'Failed to create user profile from invite.', userError),
+        };
+      }
+
+      const { error: consumeError } = await this.supabase
+        .from('invites')
+        .update({
+          used_at: new Date().toISOString(),
+          used_by_auth_id: authUser.id,
+        })
+        .eq('id', invite.id)
+        .is('used_at', null);
+
+      if (consumeError) {
+        return {
+          data: null,
+          error: toServiceError('INVITE_CONSUME_FAILED', 'Failed to mark invite as consumed.', consumeError),
+        };
+      }
+
+      return {
+        data: {
+          user: userData as UserRow,
+          invite,
+        },
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('INVITE_CONSUME_VALIDATION_ERROR', 'Invalid invite consume payload.', error),
+      };
+    }
+  }
+}
