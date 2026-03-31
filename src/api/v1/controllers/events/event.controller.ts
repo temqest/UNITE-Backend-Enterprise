@@ -43,14 +43,15 @@ const createEventValidator = {
       .object({
         org_id: z.string().uuid().optional(),
         title: z.string().min(3),
-        address: z.string().min(5),
-        type: z.enum(['blood_drive', 'training', 'advocacy']),
+        address: z.string().trim().min(1),
+        type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']),
         event_date: z.string().date(),
         start_time: z.string(),
         end_time: z.string(),
         description: z.string().optional().nullable(),
         image_url: z.string().url().optional().nullable(),
         extra_data: z.record(z.string(), z.unknown()),
+        status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled']).optional(),
         requested_by_user_id: z.string().uuid().optional().nullable(),
         is_public: z.boolean().optional(),
       })
@@ -62,8 +63,8 @@ const updateEventValidator = {
     z
       .object({
         title: z.string().min(3).optional(),
-        address: z.string().min(5).optional(),
-        type: z.enum(['blood_drive', 'training', 'advocacy']).optional(),
+        address: z.string().trim().min(1).optional(),
+        type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']).optional(),
         event_date: z.string().date().optional(),
         start_time: z.string().optional(),
         end_time: z.string().optional(),
@@ -171,13 +172,16 @@ export async function getEventsController(req: Request, res: Response): Promise<
     }
 
     const query = req.query ?? {};
+    const statusQuery = query.statuses ?? query.status;
+    const typeQuery = query.types ?? query.type;
+
     const filter: EventFilter = {
       org_id:
         typeof query.org_id === 'string' && query.org_id.trim().length > 0
           ? query.org_id
           : req.user.org_id,
-      statuses: parseStringArray(query.statuses) as EventFilter['statuses'],
-      types: parseStringArray(query.types) as EventFilter['types'],
+      statuses: parseStringArray(statusQuery) as EventFilter['statuses'],
+      types: parseStringArray(typeQuery) as EventFilter['types'],
       from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
       to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
       requested_by_user_id:
@@ -254,6 +258,46 @@ export async function updateEventController(req: Request, res: Response): Promis
     sendError(res, 500, {
       code: 'EVENT_UPDATE_ERROR',
       message: 'Unexpected error while updating event.',
+      details: error,
+    });
+  }
+}
+
+export async function deleteEventController(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+      sendError(res, 401, {
+        code: 'UNAUTHORIZED',
+        message: 'Active authenticated organization user required.',
+      });
+      return;
+    }
+
+    const eventId = req.params?.eventId ?? req.params?.id;
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'eventId path parameter is required.',
+      });
+      return;
+    }
+
+    const actor = toActor(req.user);
+    const result = await eventService.deleteEvent(actor, eventId);
+    if (result.error) {
+      sendError(res, 400, {
+        code: result.error.code,
+        message: result.error.message,
+        details: result.error.details,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: null });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'EVENT_DELETE_ERROR',
+      message: 'Unexpected error while deleting event.',
       details: error,
     });
   }

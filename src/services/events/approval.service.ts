@@ -364,7 +364,39 @@ export class EventApprovalService {
       }
 
       const event = eventResult.data;
-      if (!this.canReview(actor, event)) {
+
+      const latestApprovalResult = await this.getLatestApproval(event.id);
+      if (latestApprovalResult.error) {
+        return { data: null, error: latestApprovalResult.error };
+      }
+
+      const latestApproval = latestApprovalResult.data;
+      const requesterId = event.requested_by_user_id;
+      const isRequester = Boolean(requesterId) && actor.id === requesterId;
+      const latestByRequester = Boolean(requesterId) && latestApproval?.acted_by_user_id === requesterId;
+      const requesterTurn = Boolean(requesterId) && latestApproval ? !latestByRequester : isRequester;
+
+      if (isRequester && !requesterTurn) {
+        return {
+          data: null,
+          error: toServiceError(
+            'REQUESTER_TURN_LOCKED',
+            'You cannot act on this request right now. Wait for a reviewer action first.'
+          ),
+        };
+      }
+
+      if (!isRequester && requesterTurn) {
+        return {
+          data: null,
+          error: toServiceError(
+            'REVIEWER_TURN_LOCKED',
+            'A requester response is required before another reviewer can take action.'
+          ),
+        };
+      }
+
+      if (!isRequester && !this.canReview(actor, event)) {
         return {
           data: null,
           error: toServiceError('PERMISSION_DENIED', 'You are not allowed to review this event.'),
@@ -378,9 +410,32 @@ export class EventApprovalService {
         };
       }
 
-      const latestApprovalResult = await this.getLatestApproval(event.id);
-      if (latestApprovalResult.error) {
-        return { data: null, error: latestApprovalResult.error };
+      const isConsecutiveReviewerAction =
+        !isRequester && latestApproval?.acted_by_user_id === actor.id && latestApproval?.to_status === event.status;
+
+      if (isConsecutiveReviewerAction) {
+        return {
+          data: null,
+          error: toServiceError(
+            'REVIEWER_ACTION_LOCKED',
+            'You cannot take multiple review actions in a row on the same event. Wait for another reviewer action first.'
+          ),
+        };
+      }
+
+      if (
+        parsed.action === 'reschedule' &&
+        event.status === 'rescheduled' &&
+        latestApproval?.action === 'reschedule' &&
+        latestApproval?.acted_by_user_id === actor.id
+      ) {
+        return {
+          data: null,
+          error: toServiceError(
+            'REVIEWER_ACTION_LOCKED',
+            'You already rescheduled this event. Wait for another reviewer action before rescheduling again.'
+          ),
+        };
       }
 
       const updateResult = await this.updateEventFromApproval(event, parsed);

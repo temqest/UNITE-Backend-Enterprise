@@ -1,5 +1,5 @@
 // events/types.ts
-export type EventType = 'blood_drive' | 'training' | 'advocacy';
+export type EventType = 'blood_drive' | 'training' | 'advocacy' | 'assembly';
 export type EventStatus = 'requested' | 'pending' | 'approved' | 'rejected' | 'rescheduled';
 
 export type ParticipantType = 'user' | 'donor';
@@ -20,7 +20,26 @@ export interface AdvocacyExtraData {
   topic: string;
 }
 
-export type EventExtraData = BloodDriveExtraData | TrainingExtraData | AdvocacyExtraData;
+export interface AssemblyExtraData {
+  agenda?: string;
+}
+
+export type EventExtraData = BloodDriveExtraData | TrainingExtraData | AdvocacyExtraData | AssemblyExtraData;
+
+export interface EventRequesterSummary {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+}
+
+export interface EventLatestApprovalSummary {
+  action: EventApprovalAction;
+  acted_by_user_id: string | null;
+  to_status: EventStatus;
+  notes: string | null;
+  created_at: string;
+}
 
 export interface EventRow {
   id: string;
@@ -36,6 +55,8 @@ export interface EventRow {
   extra_data: EventExtraData;
   status: EventStatus;
   requested_by_user_id: string | null;
+  requested_by?: EventRequesterSummary | null;
+  latest_approval?: EventLatestApprovalSummary | null;
   requested_at: string;
   approved_at: string | null;
   rejected_at: string | null;

@@ -8,6 +8,7 @@ import {
 } from '../../controllers/events/approval.controller';
 import {
   createEventController,
+  deleteEventController,
   getEventsController,
   updateEventController,
 } from '../../controllers/events/event.controller';
@@ -67,6 +68,7 @@ const eventsListQuerySchema = z.object({
   from_date: z.string().optional(),
   to_date: z.string().optional(),
   search: z.string().optional(),
+  include_public: z.union([z.literal('true'), z.literal('false')]).optional(),
   include_archived: z.union([z.literal('true'), z.literal('false')]).optional(),
 });
 
@@ -138,6 +140,7 @@ eventsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, aut
   }
 });
 eventsRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(updateEventController as any));
+eventsRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), asyncHandler(deleteEventController as any));
 
 eventsRouter.post('/:id/approve', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.approve'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(approveEventController as any));
 eventsRouter.post('/:id/reject', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.approve'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(rejectEventController as any));

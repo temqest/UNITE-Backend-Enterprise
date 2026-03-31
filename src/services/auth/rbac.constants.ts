@@ -2,6 +2,8 @@ export const CANONICAL_ROLES = [
   'super_admin',
   'admin',
   'coordinator',
+  'doctor',
+  'nurse',
   'stakeholder',
   'donor',
   'viewer',
@@ -14,6 +16,8 @@ const LEGACY_ROLE_MAP: Record<string, CanonicalRole> = {
   owner: 'admin',
   staff: 'coordinator',
   volunteer: 'stakeholder',
+  doctor: 'doctor',
+  nurse: 'nurse',
 };
 
 export const PERMISSION_CATALOG = [
@@ -22,6 +26,7 @@ export const PERMISSION_CATALOG = [
   'users.read',
   'users.invite',
   'users.approve',
+  'users.manage',
   'campaigns.read',
   'campaigns.create',
   'campaigns.update',
@@ -29,6 +34,9 @@ export const PERMISSION_CATALOG = [
   'events.create',
   'events.update',
   'events.approve',
+  'events.delete',
+  'events.reschedule',
+  'events.apply',
   'chat.read',
   'chat.write',
   'inventory.read',
@@ -62,6 +70,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'users.read',
     'users.invite',
     'users.approve',
+    'users.manage',
     'campaigns.read',
     'campaigns.create',
     'campaigns.update',
@@ -69,6 +78,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'events.create',
     'events.update',
     'events.approve',
+    'events.delete',
+    'events.reschedule',
     'chat.read',
     'chat.write',
     'inventory.read',
@@ -84,17 +95,57 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'campaigns.read',
     'campaigns.create',
     'campaigns.update',
+    'users.invite',
     'events.read',
     'events.create',
     'events.update',
+    'events.approve',
+    'events.reschedule',
     'chat.read',
     'chat.write',
     'documents.read',
     'documents.write',
+    'reports.read',
   ],
-  stakeholder: ['campaigns.read', 'events.read', 'events.update', 'chat.read', 'documents.read'],
-  donor: ['campaigns.read', 'events.read'],
-  viewer: ['campaigns.read', 'events.read', 'reports.read'],
+
+  doctor: [
+    'events.read',
+    'events.approve',
+    'events.reschedule',
+    'events.update',
+    'chat.read',
+    'chat.write',
+    'documents.read',
+    'reports.read',
+  ],
+
+  nurse: [
+    'events.read',
+    'chat.read',
+    'chat.write',
+    'documents.read',
+  ],
+
+  stakeholder: [
+    'campaigns.read',
+    'events.read',
+    'events.create',
+    'events.update',
+    'chat.read',
+    'documents.read',
+  ],
+
+  donor: [
+    'campaigns.read',
+    'events.read',
+    'events.apply',
+  ],
+
+  viewer: [
+    'campaigns.read',
+    'events.read',
+    'reports.read',
+  ],
 };
 
 export function resolveCanonicalRole(roleType: string | null | undefined): CanonicalRole {

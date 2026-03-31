@@ -34,27 +34,21 @@ CREATE TABLE IF NOT EXISTS public.events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT events_type_check CHECK (type IN ('blood_drive', 'training', 'advocacy')),
+    CONSTRAINT events_type_check CHECK (type IN ('blood_drive', 'training', 'advocacy', 'assembly')),
     CONSTRAINT events_status_check CHECK (status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled')),
     CONSTRAINT events_time_window_check CHECK (end_time > start_time),
     CONSTRAINT events_title_min_length CHECK (char_length(trim(title)) >= 3),
     CONSTRAINT events_extra_data_is_object CHECK (jsonb_typeof(extra_data) = 'object'),
     CONSTRAINT events_extra_data_shape_check CHECK (
-        (type = 'blood_drive'
+        (type <> 'blood_drive')
+        OR (
+            type = 'blood_drive'
             AND extra_data ? 'target_donation'
             AND jsonb_typeof(extra_data -> 'target_donation') = 'number'
             AND (
                 NOT (extra_data ? 'collected_blood')
                 OR jsonb_typeof(extra_data -> 'collected_blood') = 'number'
             )
-        )
-        OR (type = 'training'
-            AND extra_data ? 'training_type'
-            AND jsonb_typeof(extra_data -> 'training_type') = 'string'
-        )
-        OR (type = 'advocacy'
-            AND extra_data ? 'topic'
-            AND jsonb_typeof(extra_data -> 'topic') = 'string'
         )
     ),
     CONSTRAINT events_blood_drive_numbers_non_negative CHECK (

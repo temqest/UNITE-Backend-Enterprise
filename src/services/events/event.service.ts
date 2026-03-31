@@ -44,8 +44,8 @@ function getEventWorkflowScope(extraData: unknown): {
 const EventCreateSchema = z.object({
   org_id: z.string().uuid(),
   title: z.string().trim().min(3),
-  address: z.string().trim().min(5),
-  type: z.enum(['blood_drive', 'training', 'advocacy']),
+  address: z.string().trim().min(1),
+  type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']),
   event_date: z.string().date(),
   start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
   end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
@@ -59,8 +59,8 @@ const EventCreateSchema = z.object({
 
 const EventUpdateSchema = z.object({
   title: z.string().trim().min(3).optional(),
-  address: z.string().trim().min(5).optional(),
-  type: z.enum(['blood_drive', 'training', 'advocacy']).optional(),
+  address: z.string().trim().min(1).optional(),
+  type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']).optional(),
   event_date: z.string().date().optional(),
   start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional(),
   end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional(),
@@ -74,7 +74,7 @@ const EventUpdateSchema = z.object({
 const EventFilterSchema = z.object({
   org_id: z.string().uuid().optional(),
   statuses: z.array(z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled'])).optional(),
-  types: z.array(z.enum(['blood_drive', 'training', 'advocacy'])).optional(),
+  types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
   requested_by_user_id: z.string().uuid().optional(),
@@ -87,7 +87,7 @@ const EventFilterSchema = z.object({
 const PublicEventFilterSchema = z.object({
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
-  types: z.array(z.enum(['blood_drive', 'training', 'advocacy'])).optional(),
+  types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
   search: z.string().trim().optional(),
   limit: z.number().int().min(1).max(500).optional(),
   offset: z.number().int().min(0).optional(),
@@ -95,6 +95,125 @@ const PublicEventFilterSchema = z.object({
 
 export class EventService {
   constructor(private readonly supabase: SupabaseClient) {}
+
+  private async withRequester(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
+    const requesterIds = Array.from(
+      new Set(events.map((event) => event.requested_by_user_id).filter((id): id is string => typeof id === 'string' && id.length > 0))
+    );
+
+    if (requesterIds.length === 0) {
+      return {
+        data: events.map((event) => ({ ...event, requested_by: null })),
+        error: null,
+      };
+    }
+
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .in('id', requesterIds);
+
+    if (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_REQUESTER_LOOKUP_FAILED', 'Failed to fetch event requester details.', error),
+      };
+    }
+
+    const requesterMap = new Map<string, { id: string; first_name: string; last_name: string; full_name: string }>();
+    for (const row of (data ?? []) as Array<{ id: string; first_name: string; last_name: string }>) {
+      const first = String(row.first_name ?? '').trim();
+      const last = String(row.last_name ?? '').trim();
+      requesterMap.set(row.id, {
+        id: row.id,
+        first_name: first,
+        last_name: last,
+        full_name: [first, last].filter(Boolean).join(' ').trim() || 'Unknown requester',
+      });
+    }
+
+    return {
+      data: events.map((event) => ({
+        ...event,
+        requested_by: event.requested_by_user_id ? requesterMap.get(event.requested_by_user_id) ?? null : null,
+      })),
+      error: null,
+    };
+  }
+
+  private async withLatestApproval(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
+    const eventIds = Array.from(new Set(events.map((event) => event.id).filter(Boolean)));
+
+    if (eventIds.length === 0) {
+      return { data: events, error: null };
+    }
+
+    const { data, error } = await this.supabase
+      .from('event_approvals')
+      .select('event_id, action, acted_by_user_id, to_status, notes, created_at')
+      .in('event_id', eventIds)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_LATEST_APPROVAL_LOOKUP_FAILED', 'Failed to fetch latest approval details.', error),
+      };
+    }
+
+    const latestByEventId = new Map<string, {
+      action: EventRow['latest_approval'] extends infer T
+        ? T extends { action: infer A }
+          ? A
+          : never
+        : never;
+      acted_by_user_id: string | null;
+      to_status: EventStatus;
+      notes: string | null;
+      created_at: string;
+    }>();
+
+    for (const row of (data ?? []) as Array<{
+      event_id: string;
+      action: 'request' | 'accept' | 'reject' | 'reschedule' | 'auto_approve';
+      acted_by_user_id: string | null;
+      to_status: EventStatus;
+      notes: string | null;
+      created_at: string;
+    }>) {
+      if (!latestByEventId.has(row.event_id)) {
+        latestByEventId.set(row.event_id, {
+          action: row.action,
+          acted_by_user_id: row.acted_by_user_id,
+          to_status: row.to_status,
+          notes: row.notes,
+          created_at: row.created_at,
+        });
+      }
+    }
+
+    return {
+      data: events.map((event) => ({
+        ...event,
+        latest_approval: latestByEventId.get(event.id) ?? null,
+      })),
+      error: null,
+    };
+  }
+
+  private async enrichEvents(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
+    const withRequester = await this.withRequester(events);
+    if (withRequester.error || !withRequester.data) {
+      return { data: null, error: withRequester.error };
+    }
+
+    const withLatestApproval = await this.withLatestApproval(withRequester.data);
+    if (withLatestApproval.error || !withLatestApproval.data) {
+      return { data: null, error: withLatestApproval.error };
+    }
+
+    return { data: withLatestApproval.data, error: null };
+  }
 
   private async getOrganizationSettings(orgId: string): Promise<ServiceResult<OrganizationSettingsRow | null>> {
     const { data, error } = await this.supabase
@@ -145,7 +264,11 @@ export class EventService {
           error: toServiceError('EVENT_NOT_VISIBLE', 'Event is not publicly visible.'),
         };
       }
-      return { data: event, error: null };
+      const enriched = await this.enrichEvents([event]);
+      if (enriched.error || !enriched.data?.[0]) {
+        return { data: null, error: enriched.error };
+      }
+      return { data: enriched.data[0], error: null };
     }
 
     const isSameOrg = event.org_id === actor.org_id;
@@ -175,7 +298,12 @@ export class EventService {
       }
     }
 
-    return { data: event, error: null };
+    const enriched = await this.enrichEvents([event]);
+    if (enriched.error || !enriched.data?.[0]) {
+      return { data: null, error: enriched.error };
+    }
+
+    return { data: enriched.data[0], error: null };
   }
 
   private parseTimeToMinutes(timeValue: string): number {
@@ -365,8 +493,17 @@ export class EventService {
         return { data: null, error: settingsCheck.error };
       }
 
-      const shouldAutoApprove = hasRoleAtLeast(actor, 'super_admin') || hasPermission(actor, 'auto_approve_events');
-      const status: EventStatus = shouldAutoApprove
+      const canAutoApprove = hasRoleAtLeast(actor, 'admin') || hasPermission(actor, 'auto_approve_events');
+      const requestedAutoApprove = parsed.status === 'approved';
+
+      if (requestedAutoApprove && !canAutoApprove) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'Only admin roles can auto-approve events on creation.'),
+        };
+      }
+
+      const status: EventStatus = requestedAutoApprove
         ? 'approved'
         : parsed.status && ['requested', 'pending'].includes(parsed.status)
           ? parsed.status
@@ -401,16 +538,18 @@ export class EventService {
 
       const created = data as EventRow;
 
+      const isAutoApproved = created.status === 'approved';
+
       await this.supabase.from('event_approvals').insert({
         org_id: created.org_id,
         event_id: created.id,
         acted_by_user_id: actor.id,
-        action: shouldAutoApprove ? 'auto_approve' : 'request',
+        action: isAutoApproved ? 'auto_approve' : 'request',
         from_status: null,
         to_status: created.status,
-        approval_level: shouldAutoApprove ? 'super_admin' : 'requester',
+        approval_level: isAutoApproved ? actor.role.type : 'requester',
         geo_scope: actor.geographic_area,
-        notes: shouldAutoApprove ? 'Auto-approved by super_admin rule.' : 'Event requested for review.',
+        notes: isAutoApproved ? 'Event auto-approved during creation.' : 'Event requested for review.',
       });
 
       await this.createSystemLog({
@@ -540,6 +679,69 @@ export class EventService {
     }
   }
 
+  async deleteEvent(actor: EventActorContext, eventId: string): Promise<ServiceResult<null>> {
+    const existingResult = await this.getEventById(eventId, actor);
+    if (existingResult.error || !existingResult.data) {
+      return { data: null, error: existingResult.error };
+    }
+
+    const existing = existingResult.data;
+    if (existing.org_id !== actor.org_id) {
+      return {
+        data: null,
+        error: toServiceError('PERMISSION_DENIED', 'Cannot delete events from a different organization.'),
+      };
+    }
+
+    const canDelete =
+      hasPermission(actor, 'manage_events') ||
+      hasPermission(actor, 'edit_events') ||
+      hasRoleAtLeast(actor, 'admin');
+
+    if (!canDelete) {
+      return {
+        data: null,
+        error: toServiceError('PERMISSION_DENIED', 'You do not have permission to delete this event.'),
+      };
+    }
+
+    if (!['requested', 'rejected'].includes(existing.status)) {
+      return {
+        data: null,
+        error: toServiceError('INVALID_STATUS_TRANSITION', 'Only requested or rejected events can be deleted.'),
+      };
+    }
+
+    const { error } = await this.supabase
+      .from('events')
+      .delete()
+      .eq('id', eventId)
+      .eq('org_id', actor.org_id);
+
+    if (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_DELETE_FAILED', 'Failed to delete event.', error),
+      };
+    }
+
+    await this.createSystemLog({
+      org_id: existing.org_id,
+      user_id: actor.id,
+      action_type: 'event_deleted',
+      entity_type: 'event',
+      entity_id: existing.id,
+      payload: {
+        title: existing.title,
+        status: existing.status,
+        event_date: existing.event_date,
+      },
+      status: existing.status,
+    });
+
+    return { data: null, error: null };
+  }
+
   private isEventVisibleToActor(event: EventRow, actor: EventActorContext): boolean {
     if (event.org_id !== actor.org_id) {
       return event.is_public;
@@ -549,10 +751,15 @@ export class EventService {
       return true;
     }
 
-    const hasEventScopePermission =
+    const hasViewPermission =
+      hasRoleAtLeast(actor, 'staff') ||
       hasPermission(actor, 'view_events') ||
+      hasPermission(actor, 'events.read');
+    const hasReviewPermission =
       hasPermission(actor, 'approve_events') ||
-      event.requested_by_user_id === actor.id;
+      hasPermission(actor, 'events.approve');
+    const isRequester = event.requested_by_user_id === actor.id;
+    const hasEventScopePermission = hasViewPermission || hasReviewPermission || isRequester;
 
     if (!hasEventScopePermission && !event.is_public) {
       return false;
@@ -633,7 +840,12 @@ export class EventService {
         result = result.filter((event) => buildEventSearchText(event).includes(q));
       }
 
-      return { data: result, error: null };
+      const enriched = await this.enrichEvents(result);
+      if (enriched.error || !enriched.data) {
+        return { data: null, error: enriched.error };
+      }
+
+      return { data: enriched.data, error: null };
     } catch (error) {
       return {
         data: null,
