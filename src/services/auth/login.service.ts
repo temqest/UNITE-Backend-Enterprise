@@ -21,6 +21,82 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+async function resolveOrLinkUserProfile(authUserId: string, email?: string | null): Promise<any> {
+  const { data: byAuthId, error: byAuthIdError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('auth_id', authUserId)
+    .maybeSingle();
+
+  if (byAuthIdError) {
+    throw {
+      code: AuthErrorCode.UNKNOWN_ERROR,
+      message: 'Failed to fetch user profile',
+      details: byAuthIdError,
+    } as AuthError;
+  }
+
+  if (byAuthId) {
+    return byAuthId;
+  }
+
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const { data: byEmail, error: byEmailError } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('email', normalizedEmail)
+    .limit(2);
+
+  if (byEmailError) {
+    throw {
+      code: AuthErrorCode.UNKNOWN_ERROR,
+      message: 'Failed to fetch user profile',
+      details: byEmailError,
+    } as AuthError;
+  }
+
+  const rows = byEmail ?? [];
+  if (rows.length === 0) {
+    return null;
+  }
+
+  if (rows.length > 1) {
+    throw {
+      code: AuthErrorCode.UNKNOWN_ERROR,
+      message: 'Multiple accounts found for this email. Contact support.',
+    } as AuthError;
+  }
+
+  const linked = rows[0];
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from('users')
+    .update({
+      auth_id: authUserId,
+      email: normalizedEmail,
+    })
+    .eq('id', linked.id)
+    .select('*')
+    .single();
+
+  if (updateError || !updatedProfile) {
+    throw {
+      code: AuthErrorCode.UNKNOWN_ERROR,
+      message: 'Failed to link account profile.',
+      details: updateError,
+    } as AuthError;
+  }
+
+  return updatedProfile;
+}
+
 /**
  * Login with email and password
  */
@@ -55,17 +131,12 @@ export async function loginWithEmailPassword(
     }
 
     // Step 2: Fetch user profile from users table
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('auth_id', authData.user.id)
-      .single();
+    const userData = await resolveOrLinkUserProfile(authData.user.id, authData.user.email);
 
-    if (userError || !userData) {
+    if (!userData) {
       throw {
         code: AuthErrorCode.UNKNOWN_ERROR,
         message: 'Failed to fetch user profile',
-        details: userError,
       } as AuthError;
     }
 
@@ -199,17 +270,12 @@ export async function verifyMagicLink(
     }
 
     // Step 2: Fetch user profile
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('auth_id', authData.user.id)
-      .single();
+    const userData = await resolveOrLinkUserProfile(authData.user.id, authData.user.email);
 
-    if (userError || !userData) {
+    if (!userData) {
       throw {
         code: AuthErrorCode.UNKNOWN_ERROR,
         message: 'Failed to fetch user profile',
-        details: userError,
       } as AuthError;
     }
 
@@ -290,34 +356,15 @@ export async function verifyMagicLink(
  */
 function determineRedirectPath(
   user: SessionUser,
-  organization?: OrganizationInfo
+  _organization?: OrganizationInfo
 ): string {
   // If user is inactive (should not reach here, but safety check)
   if (!user.is_active) {
     return '/pending-approval';
   }
 
-  const role = resolveCanonicalRole(user.role.type);
-
-  // Route based on canonical role.
-  switch (role) {
-    case 'super_admin':
-      return '/admin/dashboard';
-
-    case 'admin':
-      return organization ? `/org/${organization.id}/dashboard` : '/dashboard';
-
-    case 'coordinator':
-    case 'stakeholder':
-      return '/staff/dashboard';
-
-    case 'donor':
-      return '/donor/dashboard';
-
-    case 'viewer':
-    default:
-      return '/dashboard';
-  }
+  // Frontend prototype currently exposes a single dashboard route.
+  return '/dashboard';
 }
 
 /**

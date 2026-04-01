@@ -9,6 +9,7 @@ import type {
 import type { OrganizationCreateInput, OrganizationRow } from '../../models/organizations/types';
 import { OrganizationService } from '../organization/organization.service';
 import { sendVerificationCode } from '../auth/send-verification-code.service';
+import { resolveCanonicalRole, ROLE_DEFAULT_PERMISSIONS } from '../auth/rbac.constants';
 
 export interface ServiceError {
   code: string;
@@ -69,6 +70,8 @@ export interface AdminCreateStaffInput {
 export interface ApproveUserInput {
   requester_auth_id: string;
   user_id: string;
+  role_type?: string;
+  sector?: 'LGU' | 'NON-LGU' | 'Others' | 'none';
 }
 
 const AdminSignupSchema = z.object({
@@ -137,6 +140,8 @@ const AdminCreateStaffSchema = AdminCreateStaffSchemaBase
 const ApproveUserSchema = z.object({
   requester_auth_id: z.string().uuid(),
   user_id: z.string().uuid(),
+  role_type: z.string().trim().min(1).max(64).optional(),
+  sector: z.enum(['LGU', 'NON-LGU', 'Others', 'none']).optional(),
 });
 
 function toServiceError(code: string, message: string, details?: unknown): ServiceError {
@@ -164,6 +169,21 @@ function buildStaffRole(): UserRole {
   return {
     type: 'staff',
     permissions: [],
+  };
+}
+
+function buildViewerRole(): UserRole {
+  return {
+    type: 'viewer',
+    permissions: [...(ROLE_DEFAULT_PERMISSIONS.viewer ?? [])],
+  };
+}
+
+function buildRoleByType(roleType: string): UserRole {
+  const canonical = resolveCanonicalRole(roleType);
+  return {
+    type: canonical,
+    permissions: [...(ROLE_DEFAULT_PERMISSIONS[canonical] ?? [])],
   };
 }
 
@@ -283,13 +303,59 @@ export class UserService {
 
     const authErrorCode = this.getAuthErrorCode(createResult.error);
     if (authErrorCode === 'email_exists') {
+      const existingAuth = await this.findAuthUserByEmail(input.email);
+      if (existingAuth.error || !existingAuth.data) {
+        return {
+          data: null,
+          error: toServiceError(
+            'EMAIL_EXISTS',
+            'An account with this email already exists. Please sign in or use a different email.',
+            createResult.error
+          ),
+        };
+      }
+
+      const existingProfile = await this.getUserByAuthIdOptional(existingAuth.data.id);
+      if (existingProfile.error) {
+        return {
+          data: null,
+          error: existingProfile.error,
+        };
+      }
+
+      if (existingProfile.data) {
+        return {
+          data: null,
+          error: toServiceError(
+            'EMAIL_EXISTS',
+            'An account with this email already exists. Please sign in or use a different email.',
+            createResult.error
+          ),
+        };
+      }
+
+      const { error: updateError } = await this.supabase.auth.admin.updateUserById(existingAuth.data.id, {
+        password: input.password,
+        user_metadata: {
+          ...(input.user_metadata ?? {}),
+          resumed_signup: true,
+        },
+      });
+
+      if (updateError) {
+        return {
+          data: null,
+          error: toServiceError(
+            'AUTH_SIGNUP_RESUME_FAILED',
+            'Failed to resume existing signup. Please try again.',
+            updateError
+          ),
+        };
+      }
+
       return {
-        data: null,
-        error: toServiceError(
-          'EMAIL_EXISTS',
-          'An account with this email already exists. Please sign in or use a different email.',
-          createResult.error
-        ),
+        data: { id: existingAuth.data.id },
+        error: null,
       };
     }
 
@@ -907,9 +973,23 @@ export class UserService {
         };
       }
 
+      const approvedRole = parsed.role_type
+        ? buildRoleByType(parsed.role_type)
+        : buildViewerRole();
+
+      const nextGeographicArea: Record<string, unknown> =
+        target.geographic_area && typeof target.geographic_area === 'object' && !Array.isArray(target.geographic_area)
+          ? { ...(target.geographic_area as Record<string, unknown>) }
+          : {};
+      nextGeographicArea.sector = parsed.sector ?? 'none';
+
       const { data: updated, error: updateError } = await this.supabase
         .from('users')
-        .update({ is_active: true })
+        .update({
+          is_active: true,
+          role: approvedRole,
+          geographic_area: nextGeographicArea,
+        })
         .eq('id', target.id)
         .select('*')
         .single();

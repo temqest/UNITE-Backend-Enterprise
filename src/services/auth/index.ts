@@ -56,6 +56,17 @@ export {
   sendVerificationCode,
 } from './send-verification-code.service';
 
+export {
+  exchangeGoogleSession,
+  completeGoogleSignup,
+} from './google-auth.service';
+
+export type {
+  GoogleExchangeInput,
+  GoogleCompletionInput,
+  GoogleExchangeResult,
+} from './google-auth.service';
+
 export type {
   SendVerificationCodeInput,
   SendVerificationCodeResult,

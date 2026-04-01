@@ -25,6 +25,11 @@ interface FinalizePendingSignupRow {
   signup_type: 'admin' | 'staff';
 }
 
+const STAFF_PENDING_DEFAULT_ROLE = {
+  type: 'viewer',
+  permissions: ['campaigns.read', 'events.read', 'reports.read'],
+};
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -208,6 +213,27 @@ export async function verifySignupOtp(input: VerifyOtpInput): Promise<VerifyOtpR
       };
     }
 
+    // Safety net: force staff self-signups to remain pending approval even if
+    // an older DB finalize function marks them active.
+    if (finalizeResult.data.signup_type === 'staff') {
+      const { error: enforcePendingError } = await supabaseService
+        .from('users')
+        .update({
+          is_active: false,
+          role: STAFF_PENDING_DEFAULT_ROLE,
+        })
+        .eq('id', finalizeResult.data.user_id)
+        .eq('auth_id', authUserId);
+
+      if (enforcePendingError) {
+        throw {
+          code: AuthErrorCode.UNKNOWN_ERROR,
+          message: 'Failed to place account in pending approval state.',
+          details: enforcePendingError,
+        } as AuthError;
+      }
+    }
+
     const { error: confirmError } = await supabaseService.auth.admin.updateUserById(authUserId, {
       email_confirm: true,
     });
@@ -222,7 +248,7 @@ export async function verifySignupOtp(input: VerifyOtpInput): Promise<VerifyOtpR
 
     return {
       success: true,
-      message: 'Email verified successfully. Your account is now active.',
+      message: 'Email verified successfully. Your account is pending admin approval.',
       isVerified: true,
     };
   } catch (error) {

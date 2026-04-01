@@ -85,6 +85,8 @@ export async function approveStaffController(req: Request, res: Response): Promi
       const result = await userService.approvePendingUser({
         requester_auth_id: req.user.auth_id ?? req.user.id,
         user_id: approvalData.userId,
+        role_type: typeof approvalData.roleType === 'string' ? approvalData.roleType : undefined,
+        sector: typeof approvalData.sector === 'string' ? approvalData.sector : undefined,
       });
 
       if (result.error || !result.data) {
@@ -100,27 +102,58 @@ export async function approveStaffController(req: Request, res: Response): Promi
       return;
     }
 
-    const usersTable = supabaseServer.from('users') as any;
-
-    const { data, error } = await usersTable
-      .update({ is_active: false })
+    const { data: targetUserRaw, error: targetError } = await supabaseServer
+      .from('users')
+      .select('id, auth_id, is_active, org_id')
       .eq('id', approvalData.userId)
       .eq('org_id', req.user.org_id ?? '')
-      .select('*')
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    const targetUser = targetUserRaw as {
+      id: string;
+      auth_id?: string | null;
+      is_active?: boolean | null;
+      org_id?: string | null;
+    } | null;
+
+    if (targetError || !targetUser) {
       sendError(res, 400, {
         code: 'STAFF_REJECTION_FAILED',
         message: 'Failed to reject staff user.',
-        details: error,
+        details: targetError,
       });
       return;
     }
 
+    if (targetUser.is_active) {
+      sendError(res, 400, {
+        code: 'INVALID_REJECTION_TARGET',
+        message: 'Only pending signup accounts can be rejected from this flow.',
+      });
+      return;
+    }
+
+    const authId = typeof targetUser.auth_id === 'string' ? targetUser.auth_id : '';
+    if (authId) {
+      const authDelete = await supabaseServer.auth.admin.deleteUser(authId);
+      if (authDelete.error) {
+        sendError(res, 400, {
+          code: 'STAFF_REJECTION_FAILED',
+          message: 'Failed to reject staff user.',
+          details: authDelete.error,
+        });
+        return;
+      }
+    } else {
+      await supabaseServer.from('users').delete().eq('id', approvalData.userId);
+    }
+
     res.status(200).json({
       success: true,
-      data,
+      data: {
+        userId: approvalData.userId,
+        status: 'rejected',
+      },
     });
   } catch (error) {
     sendError(res, 500, {

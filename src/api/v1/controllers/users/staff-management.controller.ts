@@ -109,6 +109,7 @@ function shapeStaffResponse(user: UserRowLike): Record<string, unknown> {
   return {
     ...user,
     role: resolvedRole || null,
+    status: user.is_active === true ? 'active' : 'pending',
     sector: geographic.sector ?? null,
     province: geographic.province ?? null,
     district: geographic.district ?? null,
