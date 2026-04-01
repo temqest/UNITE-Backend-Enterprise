@@ -52,7 +52,7 @@ const EventCreateSchema = z.object({
   description: z.string().trim().optional().nullable(),
   image_url: z.string().url().optional().nullable(),
   extra_data: z.record(z.string(), z.unknown()),
-  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled']).optional(),
+  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
   requested_by_user_id: z.string().uuid().optional().nullable(),
   is_public: z.boolean().optional(),
 });
@@ -67,13 +67,19 @@ const EventUpdateSchema = z.object({
   description: z.string().trim().optional().nullable(),
   image_url: z.string().url().optional().nullable(),
   extra_data: z.record(z.string(), z.unknown()).optional(),
-  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled']).optional(),
+  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
+  completed_at: z.string().datetime().optional().nullable(),
+  actual_collected_bags: z.number().int().min(0).optional().nullable(),
+  actual_donors: z.number().int().min(0).optional().nullable(),
+  wastage_units: z.number().int().min(0).optional().nullable(),
+  post_event_notes: z.string().trim().optional().nullable(),
+  post_event_attachments: z.array(z.string().url()).optional(),
   is_public: z.boolean().optional(),
 });
 
 const EventFilterSchema = z.object({
   org_id: z.string().uuid().optional(),
-  statuses: z.array(z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled'])).optional(),
+  statuses: z.array(z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'])).optional(),
   types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),

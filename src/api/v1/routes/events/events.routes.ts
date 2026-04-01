@@ -13,6 +13,11 @@ import {
   updateEventController,
 } from '../../controllers/events/event.controller';
 import {
+  getEventStatsController,
+  listMyEventsController,
+  patchEventResultsController,
+} from '../../controllers/events/operations.controller';
+import {
   applyAsParticipantController,
   assignStaffController,
 } from '../../controllers/events/participant.controller';
@@ -107,6 +112,7 @@ function toActor(user: AuthenticatedUser): EventActorContext {
 
 eventsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), validateMiddleware(passthroughValidator), asyncHandler(createEventController as any));
 eventsRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(listQueryValidator, 'query'), asyncHandler(getEventsController as any));
+eventsRouter.get('/my-events', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(listQueryValidator, 'query'), asyncHandler(listMyEventsController as any));
 eventsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(paramsValidator, 'params'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user?.id || !req.user.org_id || req.user.is_active === false) {
@@ -139,6 +145,8 @@ eventsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, aut
     next(error);
   }
 });
+eventsRouter.get('/:id/stats', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(paramsValidator, 'params'), asyncHandler(getEventStatsController as any));
+eventsRouter.patch('/:id/results', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(patchEventResultsController as any));
 eventsRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(updateEventController as any));
 eventsRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), asyncHandler(deleteEventController as any));
 

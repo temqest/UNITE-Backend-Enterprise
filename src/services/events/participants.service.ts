@@ -33,15 +33,16 @@ const ParticipantApplySchema = z
 const ParticipantStatusUpdateSchema = z.object({
   event_id: z.string().uuid(),
   participant_id: z.string().uuid(),
-  status: z.enum(['applied', 'confirmed', 'participated', 'donated']),
+  status: z.enum(['applied', 'confirmed', 'participated', 'donated', 'no_show']),
   notes: z.string().trim().optional().nullable(),
 });
 
 const VALID_STATUS_FLOW: Record<ParticipantStatus, ParticipantStatus[]> = {
   applied: ['confirmed'],
-  confirmed: ['participated'],
+  confirmed: ['participated', 'no_show'],
   participated: ['donated'],
   donated: [],
+  no_show: [],
 };
 
 export class EventParticipantsService {

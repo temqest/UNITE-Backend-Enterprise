@@ -209,9 +209,10 @@ export function canTransitionEventStatus(fromStatus: EventStatus, toStatus: Even
 	const allowed: Record<EventStatus, EventStatus[]> = {
 		requested: ['pending', 'approved', 'rejected', 'rescheduled'],
 		pending: ['approved', 'rejected', 'rescheduled'],
-		approved: ['approved', 'pending', 'rescheduled', 'rejected'],
+		approved: ['approved', 'pending', 'rescheduled', 'rejected', 'completed'],
 		rejected: ['rejected'],
-		rescheduled: ['pending', 'approved', 'rejected'],
+		rescheduled: ['pending', 'approved', 'rejected', 'completed'],
+		completed: ['completed'],
 	};
 
 	return allowed[fromStatus]?.includes(toStatus) ?? false;

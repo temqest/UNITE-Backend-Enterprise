@@ -30,12 +30,18 @@ CREATE TABLE IF NOT EXISTS public.events (
     approved_at TIMESTAMPTZ,
     rejected_at TIMESTAMPTZ,
     rescheduled_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    actual_collected_bags INTEGER,
+    actual_donors INTEGER,
+    wastage_units INTEGER,
+    post_event_notes TEXT,
+    post_event_attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_public BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT events_type_check CHECK (type IN ('blood_drive', 'training', 'advocacy', 'assembly')),
-    CONSTRAINT events_status_check CHECK (status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled')),
+    CONSTRAINT events_status_check CHECK (status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed')),
     CONSTRAINT events_time_window_check CHECK (end_time > start_time),
     CONSTRAINT events_title_min_length CHECK (char_length(trim(title)) >= 3),
     CONSTRAINT events_extra_data_is_object CHECK (jsonb_typeof(extra_data) = 'object'),
@@ -60,6 +66,12 @@ CREATE TABLE IF NOT EXISTS public.events (
                 OR (extra_data ->> 'collected_blood')::numeric >= 0
             )
         )
+    ),
+    CONSTRAINT events_post_event_attachments_is_array CHECK (jsonb_typeof(post_event_attachments) = 'array'),
+    CONSTRAINT events_post_event_metrics_non_negative CHECK (
+        (actual_collected_bags IS NULL OR actual_collected_bags >= 0)
+        AND (actual_donors IS NULL OR actual_donors >= 0)
+        AND (wastage_units IS NULL OR wastage_units >= 0)
     )
 );
 
@@ -101,9 +113,10 @@ BEGIN
         IF NOT (
             (OLD.status = 'requested' AND NEW.status IN ('pending', 'approved', 'rejected', 'rescheduled'))
             OR (OLD.status = 'pending' AND NEW.status IN ('approved', 'rejected', 'rescheduled'))
-            OR (OLD.status = 'rescheduled' AND NEW.status IN ('pending', 'approved', 'rejected'))
-            OR (OLD.status = 'approved' AND NEW.status = 'approved')
+            OR (OLD.status = 'rescheduled' AND NEW.status IN ('pending', 'approved', 'rejected', 'completed'))
+            OR (OLD.status = 'approved' AND NEW.status IN ('approved', 'pending', 'rescheduled', 'rejected', 'completed'))
             OR (OLD.status = 'rejected' AND NEW.status = 'rejected')
+            OR (OLD.status = 'completed' AND NEW.status = 'completed')
         ) THEN
             RAISE EXCEPTION 'Invalid event status transition: % -> %', OLD.status, NEW.status;
         END IF;
@@ -114,6 +127,8 @@ BEGIN
             NEW.rejected_at = NOW();
         ELSIF NEW.status = 'rescheduled' THEN
             NEW.rescheduled_at = NOW();
+        ELSIF NEW.status = 'completed' THEN
+            NEW.completed_at = NOW();
         END IF;
     END IF;
 
@@ -176,7 +191,7 @@ CREATE TABLE IF NOT EXISTS public.event_participants (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT event_participants_type_check CHECK (participant_type IN ('user', 'donor')),
-    CONSTRAINT event_participants_status_check CHECK (status IN ('applied', 'confirmed', 'participated', 'donated')),
+    CONSTRAINT event_participants_status_check CHECK (status IN ('applied', 'confirmed', 'participated', 'donated', 'no_show')),
     CONSTRAINT event_participants_identity_check CHECK (
         (participant_type = 'user' AND participant_user_id IS NOT NULL AND participant_donor_id IS NULL)
         OR (participant_type = 'donor' AND participant_donor_id IS NOT NULL AND participant_user_id IS NULL)
@@ -225,9 +240,9 @@ CREATE TABLE IF NOT EXISTS public.event_approvals (
 
     CONSTRAINT event_approvals_action_check CHECK (action IN ('request', 'accept', 'reject', 'reschedule', 'auto_approve')),
     CONSTRAINT event_approvals_from_status_check CHECK (
-        from_status IS NULL OR from_status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled')
+        from_status IS NULL OR from_status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed')
     ),
-    CONSTRAINT event_approvals_to_status_check CHECK (to_status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled')),
+    CONSTRAINT event_approvals_to_status_check CHECK (to_status IN ('requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed')),
     CONSTRAINT event_approvals_geo_scope_is_object_or_null CHECK (
         geo_scope IS NULL OR jsonb_typeof(geo_scope) = 'object'
     )

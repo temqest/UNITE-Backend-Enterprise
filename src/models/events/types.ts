@@ -1,9 +1,9 @@
 // events/types.ts
 export type EventType = 'blood_drive' | 'training' | 'advocacy' | 'assembly';
-export type EventStatus = 'requested' | 'pending' | 'approved' | 'rejected' | 'rescheduled';
+export type EventStatus = 'requested' | 'pending' | 'approved' | 'rejected' | 'rescheduled' | 'completed';
 
 export type ParticipantType = 'user' | 'donor';
-export type ParticipantStatus = 'applied' | 'confirmed' | 'participated' | 'donated';
+export type ParticipantStatus = 'applied' | 'confirmed' | 'participated' | 'donated' | 'no_show';
 
 export type EventApprovalAction = 'request' | 'accept' | 'reject' | 'reschedule' | 'auto_approve';
 
@@ -61,6 +61,12 @@ export interface EventRow {
   approved_at: string | null;
   rejected_at: string | null;
   rescheduled_at: string | null;
+  completed_at: string | null;
+  actual_collected_bags: number | null;
+  actual_donors: number | null;
+  wastage_units: number | null;
+  post_event_notes: string | null;
+  post_event_attachments: string[];
   is_public: boolean;
   created_at: string;
   updated_at: string;
@@ -93,6 +99,12 @@ export interface EventUpdateInput {
   image_url?: string | null;
   extra_data?: EventExtraData;
   status?: EventStatus;
+  completed_at?: string | null;
+  actual_collected_bags?: number | null;
+  actual_donors?: number | null;
+  wastage_units?: number | null;
+  post_event_notes?: string | null;
+  post_event_attachments?: string[];
   is_public?: boolean;
 }
 
