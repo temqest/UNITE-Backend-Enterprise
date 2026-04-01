@@ -4,22 +4,49 @@ export const settingsUpdateSchema = z.object({
   enableEmail: z
     .boolean()
     .optional(),
+  enable_email_notifications: z
+    .boolean()
+    .optional(),
   enableInApp: z
+    .boolean()
+    .optional(),
+  enable_in_app_notifications: z
+    .boolean()
+    .optional(),
+  enableAll: z
+    .boolean()
+    .optional(),
+  enable_all_notifications: z
     .boolean()
     .optional(),
   enableSms: z
     .boolean()
     .optional(),
+  enable_sms_notifications: z
+    .boolean()
+    .optional(),
   enablePushNotifications: z
+    .boolean()
+    .optional(),
+  enable_push_notifications: z
     .boolean()
     .optional(),
   enableEventNotifications: z
     .boolean()
     .optional(),
+  enable_event_notifications: z
+    .boolean()
+    .optional(),
   enableOrgUpdates: z
     .boolean()
     .optional(),
+  enable_org_updates: z
+    .boolean()
+    .optional(),
   emailDigestFrequency: z
+    .enum(['daily', 'weekly', 'monthly', 'never'])
+    .optional(),
+  email_digest_frequency: z
     .enum(['daily', 'weekly', 'monthly', 'never'])
     .optional(),
   timezone: z

@@ -38,6 +38,9 @@ const broadcastSchema = z.object({
   send_email: z.boolean().optional(),
 });
 
+// Email delivery is temporarily disabled platform-wide.
+const EMAIL_NOTIFICATIONS_ENABLED = false;
+
 function sanitizeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
@@ -126,7 +129,7 @@ export class NotificationService {
       }
 
       const shouldSendEmail = input.send_email ?? true;
-      if (shouldSendEmail && prefs.enable_email) {
+      if (EMAIL_NOTIFICATIONS_ENABLED && shouldSendEmail && prefs.enable_email) {
         const queueResult = await notificationQueueService.enqueue(input, 'email');
 
         if (queueResult.error || !queueResult.data) {
@@ -313,6 +316,10 @@ export class NotificationService {
   }
 
   async sendEmail(payload: NotificationPayload): Promise<ServiceResult<{ sent: boolean }>> {
+    if (!EMAIL_NOTIFICATIONS_ENABLED) {
+      return { data: { sent: false }, error: null };
+    }
+
     if (!payload.user_id) {
       return {
         data: null,
@@ -736,17 +743,28 @@ export class NotificationService {
       event_canceled: 'Event canceled',
     };
 
+    const actorName = payload.actor_name?.trim() || 'A reviewer';
+    const notes = payload.notes?.trim();
+
+    const messageByType: Record<TriggerEventStatusPayload['type'], string> = {
+      event_accepted: `${actorName} approved ${payload.event_name}.`,
+      event_rejected: `${actorName} rejected ${payload.event_name}.${notes ? ` Notes: ${notes}` : ''}`,
+      event_rescheduled: `${actorName} rescheduled ${payload.event_name}${payload.when ? ` to ${payload.when}` : ''}.${notes ? ` Notes: ${notes}` : ''}`,
+      event_canceled: `${actorName} canceled ${payload.event_name}.${notes ? ` Notes: ${notes}` : ''}`,
+    };
+
     return this.createNotification({
       org_id: payload.org_id,
       user_id: payload.target_user_id,
       created_by_user_id: payload.actor_user_id,
       type: payload.type,
       title: `${titleByType[payload.type]}: ${payload.event_name}`,
-      message: `${payload.event_name} has been updated to ${payload.type.replace('event_', '').replace('_', ' ')}.`,
+      message: messageByType[payload.type],
       data: {
         event_id: payload.event_id,
         event_name: payload.event_name,
         actor_user_id: payload.actor_user_id,
+        actor_name: actorName,
         notes: payload.notes,
         when: payload.when,
       },
@@ -756,17 +774,21 @@ export class NotificationService {
   }
 
   async notifyReviewNeeded(payload: TriggerReviewNeededPayload): Promise<ServiceResult<NotificationRecord>> {
+    const actorName = payload.actor_name?.trim() || 'A requester';
+
     return this.createNotification({
       org_id: payload.org_id,
       user_id: payload.reviewer_user_id,
       created_by_user_id: payload.actor_user_id,
       type: 'new_review_needed',
       title: `Review needed: ${payload.event_name}`,
-      message: `${payload.event_name} needs your approval review.`,
+      message: `${actorName} requested review for ${payload.event_name}.${payload.notes?.trim() ? ` Notes: ${payload.notes.trim()}` : ''}`,
       data: {
         event_id: payload.event_id,
         event_name: payload.event_name,
         actor_user_id: payload.actor_user_id,
+        actor_name: actorName,
+        notes: payload.notes,
       },
       priority: 'high',
       send_email: true,

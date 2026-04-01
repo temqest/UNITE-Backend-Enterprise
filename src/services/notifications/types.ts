@@ -132,6 +132,7 @@ export interface TriggerEventStatusPayload {
   org_id: string;
   target_user_id: string;
   actor_user_id: string;
+  actor_name?: string;
   type: Extract<NotificationType, 'event_accepted' | 'event_rejected' | 'event_rescheduled' | 'event_canceled'>;
   event_id: string;
   event_name: string;
@@ -143,8 +144,10 @@ export interface TriggerReviewNeededPayload {
   org_id: string;
   reviewer_user_id: string;
   actor_user_id: string;
+  actor_name?: string;
   event_id: string;
   event_name: string;
+  notes?: string;
 }
 
 export interface TriggerSignupApprovalPayload {

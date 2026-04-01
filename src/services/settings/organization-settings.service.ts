@@ -156,6 +156,22 @@ export class OrganizationSettingsService {
         .single();
 
       if (error) {
+        if (error.code === '23514') {
+          const errorDetails = (error as { message?: string; details?: string | null; constraint?: string | null });
+          const constraintText = `${errorDetails.constraint ?? ''} ${errorDetails.message ?? ''} ${errorDetails.details ?? ''}`;
+
+          if (constraintText.includes('organization_settings_banned_specific_dates_valid')) {
+            return {
+              data: null,
+              error: toServiceError(
+                'ORG_SETTINGS_INVALID_BANNED_DATES',
+                'Invalid banned specific dates format. Dates must be valid YYYY-MM-DD values.',
+                error
+              ),
+            };
+          }
+        }
+
         return {
           data: null,
           error: toServiceError(
@@ -256,13 +272,27 @@ export class OrganizationSettingsService {
       if (error) {
         // PGRST116 = no rows found
         if (error.code === 'PGRST116') {
-          return {
-            data: null,
-            error: toServiceError(
-              'ORG_SETTINGS_NOT_FOUND',
-              'Organization settings not found'
-            ),
-          };
+          // Initialize settings on first update attempt when no row exists yet.
+          return this.createSettings({
+            org_id,
+            ...parsed,
+          });
+        }
+
+        if (error.code === '23514') {
+          const errorDetails = (error as { message?: string; details?: string | null; constraint?: string | null });
+          const constraintText = `${errorDetails.constraint ?? ''} ${errorDetails.message ?? ''} ${errorDetails.details ?? ''}`;
+
+          if (constraintText.includes('organization_settings_banned_specific_dates_valid')) {
+            return {
+              data: null,
+              error: toServiceError(
+                'ORG_SETTINGS_INVALID_BANNED_DATES',
+                'Invalid banned specific dates format. Dates must be valid YYYY-MM-DD values.',
+                error
+              ),
+            };
+          }
         }
 
         return {

@@ -10,6 +10,7 @@ import {
   isGeoAreaMatch,
   toServiceError,
 } from './event.types';
+import { notificationService } from '../notifications/notification.service';
 
 function getEventWorkflowScope(extraData: unknown): {
   geoScope: Record<string, unknown> | null;
@@ -52,6 +53,24 @@ const ApprovalActionSchema = z
 export class EventApprovalService {
   constructor(private readonly supabase: SupabaseClient) {}
 
+  private async getActorDisplayName(actor: EventActorContext): Promise<string> {
+    const { data } = await this.supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', actor.id)
+      .maybeSingle();
+
+    const first = (data as { first_name?: string } | null)?.first_name?.trim() ?? '';
+    const last = (data as { last_name?: string } | null)?.last_name?.trim() ?? '';
+    const fullName = [first, last].filter(Boolean).join(' ').trim();
+
+    if (fullName) {
+      return fullName;
+    }
+
+    return actor.role.type === 'super_admin' ? 'Super Admin' : 'A team member';
+  }
+
   private async getEvent(eventId: string): Promise<ServiceResult<EventRow>> {
     const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
 
@@ -84,26 +103,38 @@ export class EventApprovalService {
     return { data: (data as EventApprovalRow | null) ?? null, error: null };
   }
 
-  private async createNotification(params: {
-    org_id: string;
-    user_id?: string | null;
-    actor_user_id: string;
-    type: string;
-    title: string;
-    message: string;
-    data?: Record<string, unknown>;
-    priority?: 'low' | 'normal' | 'high' | 'urgent';
+  private async notifyReviewers(params: {
+    event: EventRow;
+    actor: EventActorContext;
+    notes?: string | null;
   }): Promise<void> {
-    await this.supabase.from('notifications').insert({
-      org_id: params.org_id,
-      user_id: params.user_id ?? null,
-      created_by_user_id: params.actor_user_id,
-      type: params.type,
-      title: params.title,
-      message: params.message,
-      data: params.data ?? {},
-      priority: params.priority ?? 'normal',
-    });
+    const reviewersResult = await this.getReviewersForEvent(params.event.id);
+    if (reviewersResult.error || !reviewersResult.data) {
+      return;
+    }
+
+    const actorName = await this.getActorDisplayName(params.actor);
+    const reviewerIds = reviewersResult.data
+      .map((reviewer) => reviewer.id)
+      .filter((reviewerId) => reviewerId !== params.actor.id);
+
+    if (reviewerIds.length === 0) {
+      return;
+    }
+
+    await Promise.allSettled(
+      reviewerIds.map(async (reviewerId) => {
+        await notificationService.notifyReviewNeeded({
+          org_id: params.event.org_id,
+          reviewer_user_id: reviewerId,
+          actor_user_id: params.actor.id,
+          actor_name: actorName,
+          event_id: params.event.id,
+          event_name: params.event.title,
+          notes: params.notes ?? undefined,
+        });
+      })
+    );
   }
 
   private async createSystemLog(params: {
@@ -351,6 +382,12 @@ export class EventApprovalService {
       notes: notes ?? 'Approval requested.',
     });
 
+    await this.notifyReviewers({
+      event: updated,
+      actor,
+      notes: notes ?? undefined,
+    });
+
     return { data: updated, error: null };
   }
 
@@ -454,31 +491,28 @@ export class EventApprovalService {
         approval_level: actor.role.type,
       });
 
-      await this.createNotification({
-        org_id: updated.org_id,
-        user_id: updated.requested_by_user_id,
-        actor_user_id: actor.id,
-        type: `event.${parsed.action}`,
-        title:
-          parsed.action === 'accept'
-            ? 'Event approved'
-            : parsed.action === 'reject'
-              ? 'Event rejected'
-              : 'Event rescheduled for review',
-        message:
-          parsed.action === 'accept'
-            ? `${updated.title} has been approved.`
-            : parsed.action === 'reject'
-              ? `${updated.title} has been rejected.`
-              : `${updated.title} needs another review cycle after reschedule.`,
-        data: {
+      if (updated.requested_by_user_id && updated.requested_by_user_id !== actor.id) {
+        const actorName = await this.getActorDisplayName(actor);
+        await notificationService.notifyEventStatusChange({
+          org_id: updated.org_id,
+          target_user_id: updated.requested_by_user_id,
+          actor_user_id: actor.id,
+          actor_name: actorName,
+          type:
+            parsed.action === 'accept'
+              ? 'event_accepted'
+              : parsed.action === 'reject'
+                ? 'event_rejected'
+                : 'event_rescheduled',
           event_id: updated.id,
-          from_status: event.status,
-          to_status: updated.status,
-          previous_approval_id: latestApprovalResult.data?.id ?? null,
-        },
-        priority: parsed.action === 'reject' ? 'high' : 'normal',
-      });
+          event_name: updated.title,
+          notes: parsed.notes ?? undefined,
+          when:
+            parsed.action === 'reschedule'
+              ? `${parsed.proposed_event_date ?? updated.event_date} ${parsed.proposed_start_time ?? updated.start_time}`
+              : undefined,
+        });
+      }
 
       await this.createSystemLog({
         org_id: updated.org_id,

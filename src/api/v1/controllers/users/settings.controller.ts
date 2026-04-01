@@ -56,15 +56,98 @@ function sendError(res: Response, statusCode: number, error: ApiError): void {
   res.status(statusCode).json({ success: false, error });
 }
 
-function canManageOrgSettings(user: AuthenticatedUser): boolean {
+function hasPermission(user: AuthenticatedUser, permission: string): boolean {
   const roleType = user.role?.type ?? '';
   const permissions = user.role?.permissions ?? [];
+
+  return (
+    roleType === 'super_admin' ||
+    permissions.includes('*') ||
+    permissions.includes(permission)
+  );
+}
+
+function canReadOrgSettings(user: AuthenticatedUser): boolean {
+  const roleType = user.role?.type ?? '';
+
   return (
     roleType === 'super_admin' ||
     roleType === 'admin' ||
-    permissions.includes('*') ||
-    permissions.includes('manage_org_settings')
+    hasPermission(user, 'settings.read') ||
+    hasPermission(user, 'settings.update') ||
+    hasPermission(user, 'manage_org_settings')
   );
+}
+
+function canManageOrgSettings(user: AuthenticatedUser): boolean {
+  const roleType = user.role?.type ?? '';
+
+  return (
+    roleType === 'super_admin' ||
+    roleType === 'admin' ||
+    hasPermission(user, 'settings.update') ||
+    hasPermission(user, 'manage_org_settings')
+  );
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function asDigestFrequency(value: unknown): 'daily' | 'weekly' | 'monthly' | 'never' | undefined {
+  if (value !== 'daily' && value !== 'weekly' && value !== 'monthly' && value !== 'never') {
+    return undefined;
+  }
+
+  return value;
+}
+
+function buildUserSettingsPatch(payload: Record<string, unknown>): {
+  enable_email_notifications?: boolean;
+  enable_in_app_notifications?: boolean;
+  enable_all_notifications?: boolean;
+  preferences?: Record<string, unknown>;
+} {
+  const enableEmail = false;
+  const enableInApp = asBoolean(payload.enableInApp) ?? asBoolean(payload.enable_in_app_notifications);
+  const enableAll = asBoolean(payload.enableAll) ?? asBoolean(payload.enable_all_notifications);
+  const enableSms = asBoolean(payload.enableSms) ?? asBoolean(payload.enable_sms_notifications);
+  const enablePush = asBoolean(payload.enablePushNotifications) ?? asBoolean(payload.enable_push_notifications);
+  const enableEventNotifications = asBoolean(payload.enableEventNotifications) ?? asBoolean(payload.enable_event_notifications);
+  const enableOrgUpdates = asBoolean(payload.enableOrgUpdates) ?? asBoolean(payload.enable_org_updates);
+  const emailDigestFrequency =
+    asDigestFrequency(payload.emailDigestFrequency) ?? asDigestFrequency(payload.email_digest_frequency);
+  const timezone = asString(payload.timezone);
+  const language = asString(payload.language);
+
+  const preferences: Record<string, unknown> = {
+    enableSms,
+    enablePushNotifications: enablePush,
+    enableEventNotifications,
+    enableOrgUpdates,
+    emailDigestFrequency,
+    timezone,
+    language,
+  };
+
+  const hasAnyPreference = Object.values(preferences).some((value) => value !== undefined);
+
+  const computedEnableAll =
+    enableAll ??
+    (enableInApp !== undefined
+      ? Boolean(enableInApp)
+      : undefined);
+
+  return {
+    enable_email_notifications: enableEmail,
+    enable_in_app_notifications: enableInApp,
+    enable_all_notifications: computedEnableAll,
+    preferences: hasAnyPreference ? preferences : undefined,
+  };
 }
 
 export async function getOrganizationSettingsController(req: Request, res: Response): Promise<void> {
@@ -73,6 +156,14 @@ export async function getOrganizationSettingsController(req: Request, res: Respo
       sendError(res, 401, {
         code: 'UNAUTHORIZED',
         message: 'Active authenticated organization user required.',
+      });
+      return;
+    }
+
+    if (!canReadOrgSettings(req.user)) {
+      sendError(res, 403, {
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to view organization settings.',
       });
       return;
     }
@@ -227,23 +318,7 @@ export async function updateUserSettingsController(req: Request, res: Response):
       return;
     }
 
-    const patch = {
-      enable_email_notifications: settingsData.enableEmail,
-      enable_in_app_notifications: settingsData.enableInApp,
-      enable_all_notifications:
-        settingsData.enableEmail !== undefined || settingsData.enableInApp !== undefined
-          ? (settingsData.enableEmail ?? true) || (settingsData.enableInApp ?? true)
-          : undefined,
-      preferences: {
-        enableSms: settingsData.enableSms,
-        enablePushNotifications: settingsData.enablePushNotifications,
-        enableEventNotifications: settingsData.enableEventNotifications,
-        enableOrgUpdates: settingsData.enableOrgUpdates,
-        emailDigestFrequency: settingsData.emailDigestFrequency,
-        timezone: settingsData.timezone,
-        language: settingsData.language,
-      },
-    };
+    const patch = buildUserSettingsPatch(settingsData as unknown as Record<string, unknown>);
 
     const result = await userSettingsService.updateSettings(targetUserId, patch);
     if (result.error || !result.data) {

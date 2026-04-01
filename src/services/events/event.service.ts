@@ -23,6 +23,7 @@ import {
   isGeoAreaMatch,
   toServiceError,
 } from './event.types';
+import { notificationService } from '../notifications/notification.service';
 
 function getEventWorkflowScope(extraData: unknown): {
   geoScope: Record<string, unknown> | null;
@@ -101,6 +102,68 @@ const PublicEventFilterSchema = z.object({
 
 export class EventService {
   constructor(private readonly supabase: SupabaseClient) {}
+
+  private async notifyReviewersForEvent(params: {
+    event: EventRow;
+    actor: EventActorContext;
+    notes?: string;
+  }): Promise<void> {
+    const { data: users, error } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('org_id', params.event.org_id)
+      .eq('is_active', true);
+
+    if (error) {
+      return;
+    }
+
+    const workflowScope = getEventWorkflowScope(params.event.extra_data);
+    const eventGeoScope = workflowScope.geoScope;
+
+    const reviewers = ((users as UserRow[]) ?? []).filter((user) => {
+      if (user.id === params.actor.id) {
+        return false;
+      }
+
+      if (user.role.type === 'super_admin') {
+        return true;
+      }
+
+      const permissions = user.role.permissions ?? [];
+      const hasApprovePermission = permissions.includes('*') || permissions.includes('approve_events');
+      const isCoordinator = user.role.type === 'coordinator' || user.role.type === 'admin';
+
+      if (!hasApprovePermission && !isCoordinator) {
+        return false;
+      }
+
+      return isGeoAreaMatch(eventGeoScope, user.geographic_area);
+    });
+
+    if (reviewers.length === 0) {
+      return;
+    }
+
+    const actorResult = await this.getActorById(params.actor.id);
+    const actorName = actorResult.data
+      ? [actorResult.data.first_name, actorResult.data.last_name].filter(Boolean).join(' ').trim() || 'A requester'
+      : 'A requester';
+
+    await Promise.allSettled(
+      reviewers.map(async (reviewer) => {
+        await notificationService.notifyReviewNeeded({
+          org_id: params.event.org_id,
+          reviewer_user_id: reviewer.id,
+          actor_user_id: params.actor.id,
+          actor_name: actorName,
+          event_id: params.event.id,
+          event_name: params.event.title,
+          notes: params.notes,
+        });
+      })
+    );
+  }
 
   private async withRequester(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
     const requesterIds = Array.from(
@@ -586,6 +649,14 @@ export class EventService {
         },
       });
 
+      if (['requested', 'pending'].includes(created.status)) {
+        await this.notifyReviewersForEvent({
+          event: created,
+          actor,
+          notes: 'Event submitted for review.',
+        });
+      }
+
       return { data: created, error: null };
     } catch (error) {
       return {
@@ -674,6 +745,14 @@ export class EventService {
             to_status: updated.status,
           },
         });
+
+        if (updated.status === 'pending') {
+          await this.notifyReviewersForEvent({
+            event: updated,
+            actor,
+            notes: 'Event requires review.',
+          });
+        }
       }
 
       return { data: updated, error: null };
