@@ -211,7 +211,7 @@ export function canTransitionEventStatus(fromStatus: EventStatus, toStatus: Even
 		pending: ['approved', 'rejected', 'rescheduled'],
 		approved: ['approved', 'pending', 'rescheduled', 'rejected', 'completed'],
 		rejected: ['rejected'],
-		rescheduled: ['pending', 'approved', 'rejected', 'completed'],
+		rescheduled: ['pending', 'approved', 'rejected', 'rescheduled', 'completed'],
 		completed: ['completed'],
 	};
 

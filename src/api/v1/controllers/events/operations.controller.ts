@@ -60,15 +60,20 @@ function toActor(user: AuthenticatedUser): EventActorContext {
   };
 }
 
-function parseEnumArray<T extends string>(input: unknown): T[] | undefined {
-  if (typeof input !== 'string' || input.trim().length === 0) {
-    return undefined;
-  }
+function parseEnumArray<T extends string>(input: unknown, allowedValues: readonly T[]): T[] | undefined {
+  const allowedSet = new Set(allowedValues);
 
-  return input
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value): value is T => value.length > 0);
+  const rawValues = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? input.split(',')
+      : [];
+
+  const parsed = rawValues
+    .map((value) => String(value).trim())
+    .filter((value): value is T => value.length > 0 && allowedSet.has(value as T));
+
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 export async function listMyEventsController(req: Request, res: Response): Promise<void> {
@@ -79,9 +84,11 @@ export async function listMyEventsController(req: Request, res: Response): Promi
     }
 
     const query = req.query ?? {};
+    const allowedStatuses: EventStatus[] = ['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'];
+    const allowedTypes: EventType[] = ['blood_drive', 'training', 'advocacy', 'assembly'];
     const filter = {
-      statuses: parseEnumArray<EventStatus>(query.status),
-      types: parseEnumArray<EventType>(query.type),
+      statuses: parseEnumArray<EventStatus>(query.status, allowedStatuses),
+      types: parseEnumArray<EventType>(query.type, allowedTypes),
       from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
       to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
       search: typeof query.search === 'string' ? query.search : undefined,

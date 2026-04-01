@@ -10,6 +10,7 @@ import {
 
 function getEventWorkflowScope(extraData: unknown): {
   geoScope: Record<string, unknown> | null;
+  assignedReviewerUserId: string | null;
 } {
   const asRecord =
     extraData && typeof extraData === 'object' && !Array.isArray(extraData)
@@ -22,7 +23,13 @@ function getEventWorkflowScope(extraData: unknown): {
       ? (geoScopeRaw as Record<string, unknown>)
       : null;
 
-  return { geoScope };
+  const reviewerRaw = asRecord.reviewer_user_id;
+  const assignedReviewerUserId =
+    typeof reviewerRaw === 'string' && reviewerRaw.trim().length > 0
+      ? reviewerRaw.trim()
+      : null;
+
+  return { geoScope, assignedReviewerUserId };
 }
 
 export class EventActionsService {
@@ -71,7 +78,9 @@ export class EventActionsService {
 
     const workflowScope = getEventWorkflowScope(event.extra_data);
     const eventGeoScope = workflowScope.geoScope;
+    const assignedReviewerUserId = workflowScope.assignedReviewerUserId;
     const scopeMatch = isGeoAreaMatch(eventGeoScope, actor.geographic_area);
+    const canActAsAssignedReviewer = !assignedReviewerUserId || assignedReviewerUserId === actor.id;
 
     const canRequest =
       sameOrg &&
@@ -83,10 +92,13 @@ export class EventActionsService {
 
     const canReview =
       sameOrg &&
+      canActAsAssignedReviewer &&
       scopeMatch &&
       (hasPermission(actor, 'approve_events') || hasRoleAtLeast(actor, 'coordinator'));
 
-    if (canReview && ['requested', 'pending', 'rescheduled', 'approved'].includes(event.status)) {
+    const canRequesterReview = sameOrg && isRequester;
+
+    if ((canRequesterReview || canReview) && ['requested', 'pending', 'rescheduled', 'approved'].includes(event.status)) {
       actions.add('approve_event');
       actions.add('reject_event');
       actions.add('reschedule_event');
@@ -96,7 +108,7 @@ export class EventActionsService {
       actions.add('edit_event');
     }
 
-    if (sameOrg && event.status === 'approved' && (canReview || isAdminLike)) {
+    if (sameOrg && canActAsAssignedReviewer && event.status === 'approved' && (canReview || isAdminLike)) {
       actions.add('cancel_published_event');
       actions.add('reschedule_published_event');
     }

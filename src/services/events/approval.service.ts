@@ -14,6 +14,7 @@ import { notificationService } from '../notifications/notification.service';
 
 function getEventWorkflowScope(extraData: unknown): {
   geoScope: Record<string, unknown> | null;
+  assignedReviewerUserId: string | null;
 } {
   const asRecord =
     extraData && typeof extraData === 'object' && !Array.isArray(extraData)
@@ -26,7 +27,13 @@ function getEventWorkflowScope(extraData: unknown): {
       ? (geoScopeRaw as Record<string, unknown>)
       : null;
 
-  return { geoScope };
+  const reviewerRaw = asRecord.reviewer_user_id;
+  const assignedReviewerUserId =
+    typeof reviewerRaw === 'string' && reviewerRaw.trim().length > 0
+      ? reviewerRaw.trim()
+      : null;
+
+  return { geoScope, assignedReviewerUserId };
 }
 
 const ApprovalActionSchema = z
@@ -183,6 +190,11 @@ export class EventApprovalService {
 
     const workflowScope = getEventWorkflowScope(event.extra_data);
     const eventGeoScope = workflowScope.geoScope;
+    const assignedReviewerUserId = workflowScope.assignedReviewerUserId;
+
+    if (assignedReviewerUserId && assignedReviewerUserId !== actor.id) {
+      return false;
+    }
 
     return isGeoAreaMatch(eventGeoScope, actor.geographic_area);
   }

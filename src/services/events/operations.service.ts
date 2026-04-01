@@ -472,6 +472,16 @@ export class EventOperationsService {
         };
       }
 
+      if (event.type !== 'blood_drive') {
+        return {
+          data: null,
+          error: toServiceError(
+            'EVENT_RESULTS_NOT_SUPPORTED',
+            'Post-event donation and inventory updates are only supported for blood drive events.'
+          ),
+        };
+      }
+
       const shouldMarkCompleted = parsed.mark_as_completed !== false;
 
       const extraDataSource =
