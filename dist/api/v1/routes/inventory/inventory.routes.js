@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.inventoryRouter = void 0;
+const express_1 = require("express");
+const inventory_controller_1 = require("../../controllers/inventory/inventory.controller");
+const auth_middleware_1 = require("../../../../middelware/auth.middleware");
+const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
+const async_handler_1 = require("../../../../lib/async-handler");
+const inventoryRouter = (0, express_1.Router)();
+exports.inventoryRouter = inventoryRouter;
+inventoryRouter.get('/dashboard', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('inventory.read'), (0, async_handler_1.asyncHandler)(inventory_controller_1.getInventoryDashboardController));
+inventoryRouter.get('/blood-types/:bloodType', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('inventory.read'), (0, async_handler_1.asyncHandler)(inventory_controller_1.getBloodTypeDetailController));
+inventoryRouter.post('/transactions', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('inventory.update'), (0, async_handler_1.asyncHandler)(inventory_controller_1.recordInventoryTransactionController));
+exports.default = inventoryRouter;
