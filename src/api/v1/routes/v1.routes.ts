@@ -6,6 +6,7 @@ import { settingsRouter } from './settings';
 import { usersRouter } from './users';
 import { organizationsRouter } from './organizations';
 import { geographicRouter } from './geographic';
+import { inventoryRouter } from './inventory';
 
 const v1Router = Router();
 
@@ -16,6 +17,7 @@ v1Router.use('/notifications', notificationsRouter);
 v1Router.use('/settings', settingsRouter);
 v1Router.use('/organizations', organizationsRouter);
 v1Router.use('/geographic', geographicRouter);
+v1Router.use('/inventory', inventoryRouter);
 
 export { v1Router };
 export default v1Router;
