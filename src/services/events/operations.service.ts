@@ -33,6 +33,9 @@ export interface MyEventRecord {
 
 export interface EventParticipantView extends EventParticipantRow {
   participant_name: string | null;
+  participant_first_name: string | null;
+  participant_last_name: string | null;
+  participant_email: string | null;
 }
 
 export interface EventStaffView extends EventStaffRow {
@@ -368,10 +371,16 @@ export class EventOperationsService {
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ));
 
-    const staffUserIds = Array.from(new Set(staff.map((entry) => entry.user_id)));
-    const allUserIds = Array.from(new Set([...participantUserIds, ...staffUserIds]));
+    const participantDonorIds = Array.from(new Set(
+      participants
+        .map((participant) => participant.participant_donor_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    ));
 
-    let userMap = new Map<string, { full_name: string; email: string }>();
+    const staffUserIds = Array.from(new Set(staff.map((entry) => entry.user_id)));
+    const allUserIds = Array.from(new Set([...participantUserIds, ...participantDonorIds, ...staffUserIds]));
+
+    let userMap = new Map<string, { first_name: string; last_name: string; full_name: string; email: string }>();
     if (allUserIds.length > 0) {
       const { data: usersData, error: usersError } = await this.supabase
         .from('users')
@@ -390,6 +399,8 @@ export class EventOperationsService {
         const last = String(row.last_name ?? '').trim();
         const fullName = [first, last].filter(Boolean).join(' ').trim() || row.email;
         userMap.set(row.id, {
+          first_name: first,
+          last_name: last,
           full_name: fullName,
           email: row.email,
         });
@@ -418,7 +429,24 @@ export class EventOperationsService {
         ...participant,
         participant_name: participant.participant_user_id
           ? userMap.get(participant.participant_user_id)?.full_name ?? null
-          : null,
+          : participant.participant_donor_id
+            ? userMap.get(participant.participant_donor_id)?.full_name ?? null
+            : null,
+        participant_first_name: participant.participant_user_id
+          ? userMap.get(participant.participant_user_id)?.first_name ?? null
+          : participant.participant_donor_id
+            ? userMap.get(participant.participant_donor_id)?.first_name ?? null
+            : null,
+        participant_last_name: participant.participant_user_id
+          ? userMap.get(participant.participant_user_id)?.last_name ?? null
+          : participant.participant_donor_id
+            ? userMap.get(participant.participant_donor_id)?.last_name ?? null
+            : null,
+        participant_email: participant.participant_user_id
+          ? userMap.get(participant.participant_user_id)?.email ?? null
+          : participant.participant_donor_id
+            ? userMap.get(participant.participant_donor_id)?.email ?? null
+            : null,
       })),
       staff: staff.map((entry) => ({
         ...entry,

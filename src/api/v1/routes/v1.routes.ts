@@ -7,6 +7,7 @@ import { usersRouter } from './users';
 import { organizationsRouter } from './organizations';
 import { geographicRouter } from './geographic';
 import { inventoryRouter } from './inventory';
+import { donorRouter } from './donor';
 
 const v1Router = Router();
 
@@ -18,6 +19,7 @@ v1Router.use('/settings', settingsRouter);
 v1Router.use('/organizations', organizationsRouter);
 v1Router.use('/geographic', geographicRouter);
 v1Router.use('/inventory', inventoryRouter);
+v1Router.use('/donor', donorRouter);
 
 export { v1Router };
 export default v1Router;

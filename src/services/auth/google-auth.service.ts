@@ -9,9 +9,13 @@ export interface GoogleExchangeInput {
 }
 
 export interface GoogleCompletionInput extends GoogleExchangeInput {
-  role: 'admin' | 'staff';
+  role: 'admin' | 'staff' | 'donor';
   firstName: string;
   lastName: string;
+  blood_type?: 'O+' | 'O-' | 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-';
+  phone_number?: string;
+  province?: string;
+  city?: string;
   organization?: {
     name: string;
     code: string;
@@ -249,7 +253,10 @@ function determineRedirectPath(user: SessionUser, _organization?: OrganizationIn
     return '/pending-approval';
   }
 
-  // Frontend prototype currently exposes a single dashboard route.
+  if (String(user.role?.type ?? '').toLowerCase() === 'donor') {
+    return '/donor/dashboard';
+  }
+
   return '/dashboard';
 }
 
@@ -456,7 +463,7 @@ export async function completeGoogleSignup(input: GoogleCompletionInput): Promis
         type: 'super_admin',
         permissions: ['*'],
       };
-    } else {
+    } else if (role === 'staff') {
       const orgCode = normalizeCode(input.org_code ?? '');
       if (!orgCode) {
         throw {
@@ -491,9 +498,46 @@ export async function completeGoogleSignup(input: GoogleCompletionInput): Promis
         type: 'viewer',
         permissions: [...(ROLE_DEFAULT_PERMISSIONS.viewer ?? [])],
       };
+    } else {
+      const explicitOrgCode = normalizeCode(input.org_code ?? '');
+      const fallbackOrgCode = normalizeCode(process.env.DEFAULT_DONOR_ORG_CODE ?? '');
+      const donorOrgCode = explicitOrgCode || fallbackOrgCode;
+
+      let orgQuery = supabaseService
+        .from('organizations')
+        .select('id, is_active')
+        .eq('is_active', true)
+        .limit(1);
+
+      if (donorOrgCode) {
+        orgQuery = orgQuery.ilike('code', donorOrgCode);
+      }
+
+      const { data: organization, error: orgLookupError } = await orgQuery.maybeSingle();
+
+      if (orgLookupError) {
+        throw {
+          code: 'ORG_LOOKUP_FAILED',
+          message: 'Failed to resolve donor organization.',
+          details: orgLookupError,
+        } as AuthError;
+      }
+
+      if (!organization || organization.is_active !== true) {
+        throw {
+          code: 'ORG_NOT_FOUND',
+          message: 'No active organization is available for donor signup.',
+        } as AuthError;
+      }
+
+      orgId = organization.id;
+      rolePayload = {
+        type: 'donor',
+        permissions: [...(ROLE_DEFAULT_PERMISSIONS.donor ?? [])],
+      };
     }
 
-    const isActive = role === 'admin';
+    const isActive = role === 'admin' || role === 'donor';
 
     const { error: userInsertError } = await (supabaseService.from('users') as any)
       .insert({
@@ -513,6 +557,42 @@ export async function completeGoogleSignup(input: GoogleCompletionInput): Promis
         message: 'Failed to create user profile.',
         details: userInsertError,
       } as AuthError;
+    }
+
+    if (role === 'donor') {
+      const { data: donorUser, error: donorUserError } = await supabaseService
+        .from('users')
+        .select('id')
+        .eq('auth_id', authUser.id)
+        .single();
+
+      if (donorUserError || !donorUser?.id) {
+        throw {
+          code: 'DONOR_PROFILE_CREATE_FAILED',
+          message: 'Failed to resolve donor account for profile setup.',
+          details: donorUserError,
+        } as AuthError;
+      }
+
+      const donorProfilePayload = {
+        user_id: donorUser.id,
+        blood_type: input.blood_type ?? null,
+        phone_number: input.phone_number ?? null,
+        province: input.province ?? null,
+        city: input.city ?? null,
+        health_info: {},
+      };
+
+      const { error: donorProfileError } = await (supabaseService.from('donor_profiles') as any)
+        .upsert(donorProfilePayload, { onConflict: 'user_id' });
+
+      if (donorProfileError) {
+        throw {
+          code: 'DONOR_PROFILE_CREATE_FAILED',
+          message: 'Failed to create donor profile.',
+          details: donorProfileError,
+        } as AuthError;
+      }
     }
 
     await supabaseService.auth.admin.updateUserById(authUser.id, {

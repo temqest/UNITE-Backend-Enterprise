@@ -95,10 +95,34 @@ const PublicEventFilterSchema = z.object({
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
   types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
+  province: z.string().trim().optional(),
+  city: z.string().trim().optional(),
   search: z.string().trim().optional(),
   limit: z.number().int().min(1).max(500).optional(),
   offset: z.number().int().min(0).optional(),
 });
+
+function extraValueToString(extraData: unknown, key: string): string {
+  if (!extraData || typeof extraData !== 'object' || Array.isArray(extraData)) {
+    return '';
+  }
+
+  const value = (extraData as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function allowsDonorSignup(event: Pick<EventRow, 'is_public' | 'extra_data'>): boolean {
+  if (event.is_public) {
+    return true;
+  }
+
+  if (!event.extra_data || typeof event.extra_data !== 'object' || Array.isArray(event.extra_data)) {
+    return false;
+  }
+
+  const allowRaw = (event.extra_data as Record<string, unknown>).allow_donor_signup;
+  return allowRaw === true || allowRaw === 'true';
+}
 
 export class EventService {
   constructor(private readonly supabase: SupabaseClient) {}
@@ -948,7 +972,6 @@ export class EventService {
       let query = this.supabase
         .from('events')
         .select('*')
-        .eq('is_public', true)
         .eq('status', 'approved')
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true })
@@ -974,7 +997,23 @@ export class EventService {
         };
       }
 
-      let rows = (data as EventRow[]) ?? [];
+      let rows = ((data as EventRow[]) ?? []).filter((event) => allowsDonorSignup(event));
+
+      if (parsed.province) {
+        const province = parsed.province.trim().toLowerCase();
+        rows = rows.filter((event) => extraValueToString(event.extra_data, 'province').toLowerCase() === province);
+      }
+
+      if (parsed.city) {
+        const city = parsed.city.trim().toLowerCase();
+        rows = rows.filter((event) => {
+          const eventCity = extraValueToString(event.extra_data, 'city')
+            || extraValueToString(event.extra_data, 'municipality')
+            || extraValueToString(event.extra_data, 'location');
+          return eventCity.toLowerCase() === city;
+        });
+      }
+
       if (parsed.search) {
         const q = parsed.search.toLowerCase();
         rows = rows.filter((event) => buildEventSearchText(event).includes(q));

@@ -49,6 +49,8 @@ export interface PublicEventFilter {
 	from_date?: string;
 	to_date?: string;
 	types?: EventRow['type'][];
+	province?: string;
+	city?: string;
 	search?: string;
 	limit?: number;
 	offset?: number;

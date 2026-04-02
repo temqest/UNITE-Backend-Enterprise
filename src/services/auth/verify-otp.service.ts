@@ -22,7 +22,7 @@ export interface VerifyOtpResult {
 interface FinalizePendingSignupRow {
   org_id: string;
   user_id: string;
-  signup_type: 'admin' | 'staff';
+  signup_type: 'admin' | 'staff' | 'donor';
 }
 
 const STAFF_PENDING_DEFAULT_ROLE = {
@@ -246,9 +246,13 @@ export async function verifySignupOtp(input: VerifyOtpInput): Promise<VerifyOtpR
       } as AuthError;
     }
 
+    const isStaff = finalizeResult.data.signup_type === 'staff';
+
     return {
       success: true,
-      message: 'Email verified successfully. Your account is pending admin approval.',
+      message: isStaff
+        ? 'Email verified successfully. Your account is pending admin approval.'
+        : 'Email verified successfully. Your donor account is now active.',
       isVerified: true,
     };
   } catch (error) {

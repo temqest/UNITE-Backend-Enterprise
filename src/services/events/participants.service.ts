@@ -38,11 +38,11 @@ const ParticipantStatusUpdateSchema = z.object({
 });
 
 const VALID_STATUS_FLOW: Record<ParticipantStatus, ParticipantStatus[]> = {
-  applied: ['confirmed'],
+  applied: ['confirmed', 'participated', 'no_show'],
   confirmed: ['participated', 'no_show'],
-  participated: ['donated'],
-  donated: [],
-  no_show: [],
+  participated: ['donated', 'no_show'],
+  donated: ['participated', 'no_show'],
+  no_show: ['confirmed', 'participated'],
 };
 
 export class EventParticipantsService {

@@ -62,6 +62,18 @@ const applyParticipantValidator = {
       .safeParse(payload),
 };
 
+const updateParticipantStatusValidator = {
+  validate: (payload: unknown) =>
+    z
+      .object({
+        event_id: z.string().uuid().optional(),
+        participant_id: z.string().uuid().optional(),
+        status: z.enum(['applied', 'confirmed', 'participated', 'donated', 'no_show']),
+        notes: z.string().optional().nullable(),
+      })
+      .safeParse(payload),
+};
+
 function sendError(res: Response, statusCode: number, error: ApiError): void {
   res.status(statusCode).json({ success: false, error });
 }
@@ -185,6 +197,71 @@ export async function applyAsParticipantController(req: Request, res: Response):
     sendError(res, 500, {
       code: 'PARTICIPANT_APPLY_ERROR',
       message: 'Unexpected error while applying as participant.',
+      details: error,
+    });
+  }
+}
+
+export async function updateParticipantStatusController(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+      sendError(res, 401, {
+        code: 'UNAUTHORIZED',
+        message: 'Active authenticated organization user required.',
+      });
+      return;
+    }
+
+    const parsed = updateParticipantStatusValidator.validate(req.body ?? {});
+    if (!parsed.success) {
+      sendError(res, 400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid participant status payload.',
+        details: parsed.error.issues,
+      });
+      return;
+    }
+
+    const eventId = parsed.data.event_id ?? req.params?.eventId ?? req.params?.id;
+    const participantId = parsed.data.participant_id ?? req.params?.participantId;
+
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'event_id or eventId path parameter is required.',
+      });
+      return;
+    }
+
+    if (!participantId) {
+      sendError(res, 400, {
+        code: 'PARTICIPANT_ID_REQUIRED',
+        message: 'participant_id or participantId path parameter is required.',
+      });
+      return;
+    }
+
+    const result = await participantsService.updateParticipantStatus(toActor(req.user), {
+      event_id: eventId,
+      participant_id: participantId,
+      status: parsed.data.status,
+      notes: parsed.data.notes ?? undefined,
+    });
+
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'PARTICIPANT_STATUS_UPDATE_FAILED',
+        message: result.error?.message ?? 'Failed to update participant status.',
+        details: result.error?.details,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'PARTICIPANT_STATUS_UPDATE_ERROR',
+      message: 'Unexpected error while updating participant status.',
       details: error,
     });
   }

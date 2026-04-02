@@ -10,6 +10,7 @@ import {
   createEventController,
   deleteEventController,
   getEventsController,
+  getPublicEventsController,
   updateEventController,
 } from '../../controllers/events/event.controller';
 import {
@@ -20,6 +21,7 @@ import {
 import {
   applyAsParticipantController,
   assignStaffController,
+  updateParticipantStatusController,
 } from '../../controllers/events/participant.controller';
 import { EventService } from '../../../../services/events/event.service';
 import { supabaseServer } from '../../../../lib/supabase/supabase.client';
@@ -56,6 +58,11 @@ const eventIdParamSchema = z.object({
   id: z.string().uuid({ message: 'id must be a valid UUID' }),
 });
 
+const participantStatusParamSchema = z.object({
+  id: z.string().uuid({ message: 'id must be a valid UUID' }),
+  participantId: z.string().uuid({ message: 'participantId must be a valid UUID' }),
+});
+
 const eventsListQuerySchema = z.object({
   limit: z
     .string()
@@ -72,6 +79,8 @@ const eventsListQuerySchema = z.object({
   type: z.string().optional(),
   from_date: z.string().optional(),
   to_date: z.string().optional(),
+  province: z.string().optional(),
+  city: z.string().optional(),
   search: z.string().optional(),
   include_public: z.union([z.literal('true'), z.literal('false')]).optional(),
   include_archived: z.union([z.literal('true'), z.literal('false')]).optional(),
@@ -80,6 +89,16 @@ const eventsListQuerySchema = z.object({
 const paramsValidator = {
   validate: (payload: unknown) => {
     const parsed = eventIdParamSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { success: false as const, error: parsed.error.issues };
+    }
+    return { success: true as const, data: parsed.data };
+  },
+};
+
+const participantStatusParamsValidator = {
+  validate: (payload: unknown) => {
+    const parsed = participantStatusParamSchema.safeParse(payload);
     if (!parsed.success) {
       return { success: false as const, error: parsed.error.issues };
     }
@@ -111,6 +130,7 @@ function toActor(user: AuthenticatedUser): EventActorContext {
 }
 
 eventsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), validateMiddleware(passthroughValidator), asyncHandler(createEventController as any));
+eventsRouter.get('/public', validateMiddleware(listQueryValidator, 'query'), asyncHandler(getPublicEventsController as any));
 eventsRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(listQueryValidator, 'query'), asyncHandler(getEventsController as any));
 eventsRouter.get('/my-events', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(listQueryValidator, 'query'), asyncHandler(listMyEventsController as any));
 eventsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(paramsValidator, 'params'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -156,6 +176,7 @@ eventsRouter.post('/:id/reschedule', authMiddleware, requireActiveUser, requireO
 eventsRouter.post('/:id/cancel', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(cancelEventController as any));
 eventsRouter.post('/:id/staff', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(assignStaffController as any));
 eventsRouter.post('/:id/apply', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(applyAsParticipantController as any));
+eventsRouter.patch('/:id/participants/:participantId/status', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(participantStatusParamsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(updateParticipantStatusController as any));
 
 export { eventsRouter };
 export default eventsRouter;

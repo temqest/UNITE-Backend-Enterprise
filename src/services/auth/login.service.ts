@@ -363,7 +363,10 @@ function determineRedirectPath(
     return '/pending-approval';
   }
 
-  // Frontend prototype currently exposes a single dashboard route.
+  if (String(user.role?.type ?? '').toLowerCase() === 'donor') {
+    return '/donor/dashboard';
+  }
+
   return '/dashboard';
 }
 
