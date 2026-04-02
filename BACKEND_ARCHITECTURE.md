@@ -819,4 +819,4 @@ sequenceDiagram
   Note over DB,NS: If notification send_email=true, message is queued and flushed async
 ```
 
-This architecture provides a strong base for regulated, auditable, tenant-safe operations while remaining extensible for future blood bank modules.
+This architecture provides a strong base for regulated, auditable, tenant-safe operations while remaining extensible for future blood bank modules. 11
