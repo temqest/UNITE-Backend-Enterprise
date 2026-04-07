@@ -26,7 +26,7 @@ SUPABASE_JWT_EXPIRE_SECONDS=1800
 SUPABASE_JWT_REFRESH_EXPIRE_SECONDS=1209600
 ```
 
-## How the Frontend Handles This
+## How the Frontend Handles 1
 
 ### Access Token Refresh Strategy
 - **Token Lifetime**: 30 minutes
