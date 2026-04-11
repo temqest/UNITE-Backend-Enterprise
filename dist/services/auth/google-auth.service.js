@@ -162,7 +162,9 @@ function determineRedirectPath(user, _organization) {
     if (!user.is_active) {
         return '/pending-approval';
     }
-    // Frontend prototype currently exposes a single dashboard route.
+    if (String(user.role?.type ?? '').toLowerCase() === 'donor') {
+        return '/donor/dashboard';
+    }
     return '/dashboard';
 }
 async function buildSessionForAuthUser(input) {
@@ -336,7 +338,7 @@ async function completeGoogleSignup(input) {
                 permissions: ['*'],
             };
         }
-        else {
+        else if (role === 'staff') {
             const orgCode = normalizeCode(input.org_code ?? '');
             if (!orgCode) {
                 throw {
@@ -368,7 +370,39 @@ async function completeGoogleSignup(input) {
                 permissions: [...(rbac_constants_1.ROLE_DEFAULT_PERMISSIONS.viewer ?? [])],
             };
         }
-        const isActive = role === 'admin';
+        else {
+            const explicitOrgCode = normalizeCode(input.org_code ?? '');
+            const fallbackOrgCode = normalizeCode(process.env.DEFAULT_DONOR_ORG_CODE ?? '');
+            const donorOrgCode = explicitOrgCode || fallbackOrgCode;
+            let orgQuery = supabaseService
+                .from('organizations')
+                .select('id, is_active')
+                .eq('is_active', true)
+                .limit(1);
+            if (donorOrgCode) {
+                orgQuery = orgQuery.ilike('code', donorOrgCode);
+            }
+            const { data: organization, error: orgLookupError } = await orgQuery.maybeSingle();
+            if (orgLookupError) {
+                throw {
+                    code: 'ORG_LOOKUP_FAILED',
+                    message: 'Failed to resolve donor organization.',
+                    details: orgLookupError,
+                };
+            }
+            if (!organization || organization.is_active !== true) {
+                throw {
+                    code: 'ORG_NOT_FOUND',
+                    message: 'No active organization is available for donor signup.',
+                };
+            }
+            orgId = organization.id;
+            rolePayload = {
+                type: 'donor',
+                permissions: [...(rbac_constants_1.ROLE_DEFAULT_PERMISSIONS.donor ?? [])],
+            };
+        }
+        const isActive = role === 'admin' || role === 'donor';
         const { error: userInsertError } = await supabaseService.from('users')
             .insert({
             org_id: orgId,
@@ -386,6 +420,37 @@ async function completeGoogleSignup(input) {
                 message: 'Failed to create user profile.',
                 details: userInsertError,
             };
+        }
+        if (role === 'donor') {
+            const { data: donorUser, error: donorUserError } = await supabaseService
+                .from('users')
+                .select('id')
+                .eq('auth_id', authUser.id)
+                .single();
+            if (donorUserError || !donorUser?.id) {
+                throw {
+                    code: 'DONOR_PROFILE_CREATE_FAILED',
+                    message: 'Failed to resolve donor account for profile setup.',
+                    details: donorUserError,
+                };
+            }
+            const donorProfilePayload = {
+                user_id: donorUser.id,
+                blood_type: input.blood_type ?? null,
+                phone_number: input.phone_number ?? null,
+                province: input.province ?? null,
+                city: input.city ?? null,
+                health_info: {},
+            };
+            const { error: donorProfileError } = await supabaseService.from('donor_profiles')
+                .upsert(donorProfilePayload, { onConflict: 'user_id' });
+            if (donorProfileError) {
+                throw {
+                    code: 'DONOR_PROFILE_CREATE_FAILED',
+                    message: 'Failed to create donor profile.',
+                    details: donorProfileError,
+                };
+            }
         }
         await supabaseService.auth.admin.updateUserById(authUser.id, {
             email_confirm: true,

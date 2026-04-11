@@ -189,9 +189,12 @@ async function verifySignupOtp(input) {
                 details: confirmError,
             };
         }
+        const isStaff = finalizeResult.data.signup_type === 'staff';
         return {
             success: true,
-            message: 'Email verified successfully. Your account is pending admin approval.',
+            message: isStaff
+                ? 'Email verified successfully. Your account is pending admin approval.'
+                : 'Email verified successfully. Your donor account is now active.',
             isVerified: true,
         };
     }

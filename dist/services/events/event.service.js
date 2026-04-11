@@ -64,10 +64,29 @@ const PublicEventFilterSchema = zod_1.z.object({
     from_date: zod_1.z.string().date().optional(),
     to_date: zod_1.z.string().date().optional(),
     types: zod_1.z.array(zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
+    province: zod_1.z.string().trim().optional(),
+    city: zod_1.z.string().trim().optional(),
     search: zod_1.z.string().trim().optional(),
     limit: zod_1.z.number().int().min(1).max(500).optional(),
     offset: zod_1.z.number().int().min(0).optional(),
 });
+function extraValueToString(extraData, key) {
+    if (!extraData || typeof extraData !== 'object' || Array.isArray(extraData)) {
+        return '';
+    }
+    const value = extraData[key];
+    return typeof value === 'string' ? value.trim() : '';
+}
+function allowsDonorSignup(event) {
+    if (event.is_public) {
+        return true;
+    }
+    if (!event.extra_data || typeof event.extra_data !== 'object' || Array.isArray(event.extra_data)) {
+        return false;
+    }
+    const allowRaw = event.extra_data.allow_donor_signup;
+    return allowRaw === true || allowRaw === 'true';
+}
 class EventService {
     supabase;
     constructor(supabase) {
@@ -748,7 +767,6 @@ class EventService {
             let query = this.supabase
                 .from('events')
                 .select('*')
-                .eq('is_public', true)
                 .eq('status', 'approved')
                 .order('event_date', { ascending: true })
                 .order('start_time', { ascending: true })
@@ -769,7 +787,20 @@ class EventService {
                     error: (0, event_types_1.toServiceError)('PUBLIC_EVENT_LIST_FAILED', 'Failed to fetch public events.', error),
                 };
             }
-            let rows = data ?? [];
+            let rows = (data ?? []).filter((event) => allowsDonorSignup(event));
+            if (parsed.province) {
+                const province = parsed.province.trim().toLowerCase();
+                rows = rows.filter((event) => extraValueToString(event.extra_data, 'province').toLowerCase() === province);
+            }
+            if (parsed.city) {
+                const city = parsed.city.trim().toLowerCase();
+                rows = rows.filter((event) => {
+                    const eventCity = extraValueToString(event.extra_data, 'city')
+                        || extraValueToString(event.extra_data, 'municipality')
+                        || extraValueToString(event.extra_data, 'location');
+                    return eventCity.toLowerCase() === city;
+                });
+            }
             if (parsed.search) {
                 const q = parsed.search.toLowerCase();
                 rows = rows.filter((event) => (0, event_types_1.buildEventSearchText)(event).includes(q));

@@ -12,7 +12,11 @@ function getEventWorkflowScope(extraData) {
     const geoScope = geoScopeRaw && typeof geoScopeRaw === 'object' && !Array.isArray(geoScopeRaw)
         ? geoScopeRaw
         : null;
-    return { geoScope };
+    const reviewerRaw = asRecord.reviewer_user_id;
+    const assignedReviewerUserId = typeof reviewerRaw === 'string' && reviewerRaw.trim().length > 0
+        ? reviewerRaw.trim()
+        : null;
+    return { geoScope, assignedReviewerUserId };
 }
 const ApprovalActionSchema = zod_1.z
     .object({
@@ -136,6 +140,10 @@ class EventApprovalService {
         }
         const workflowScope = getEventWorkflowScope(event.extra_data);
         const eventGeoScope = workflowScope.geoScope;
+        const assignedReviewerUserId = workflowScope.assignedReviewerUserId;
+        if (assignedReviewerUserId && assignedReviewerUserId !== actor.id) {
+            return false;
+        }
         return (0, event_types_1.isGeoAreaMatch)(eventGeoScope, actor.geographic_area);
     }
     async getReviewersForEvent(eventId) {
