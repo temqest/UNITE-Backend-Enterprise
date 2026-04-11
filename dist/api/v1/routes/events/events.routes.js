@@ -22,6 +22,10 @@ const passthroughValidator = {
 const eventIdParamSchema = zod_1.z.object({
     id: zod_1.z.string().uuid({ message: 'id must be a valid UUID' }),
 });
+const participantStatusParamSchema = zod_1.z.object({
+    id: zod_1.z.string().uuid({ message: 'id must be a valid UUID' }),
+    participantId: zod_1.z.string().uuid({ message: 'participantId must be a valid UUID' }),
+});
 const eventsListQuerySchema = zod_1.z.object({
     limit: zod_1.z
         .string()
@@ -38,6 +42,8 @@ const eventsListQuerySchema = zod_1.z.object({
     type: zod_1.z.string().optional(),
     from_date: zod_1.z.string().optional(),
     to_date: zod_1.z.string().optional(),
+    province: zod_1.z.string().optional(),
+    city: zod_1.z.string().optional(),
     search: zod_1.z.string().optional(),
     include_public: zod_1.z.union([zod_1.z.literal('true'), zod_1.z.literal('false')]).optional(),
     include_archived: zod_1.z.union([zod_1.z.literal('true'), zod_1.z.literal('false')]).optional(),
@@ -45,6 +51,15 @@ const eventsListQuerySchema = zod_1.z.object({
 const paramsValidator = {
     validate: (payload) => {
         const parsed = eventIdParamSchema.safeParse(payload);
+        if (!parsed.success) {
+            return { success: false, error: parsed.error.issues };
+        }
+        return { success: true, data: parsed.data };
+    },
+};
+const participantStatusParamsValidator = {
+    validate: (payload) => {
+        const parsed = participantStatusParamSchema.safeParse(payload);
         if (!parsed.success) {
             return { success: false, error: parsed.error.issues };
         }
@@ -73,6 +88,7 @@ function toActor(user) {
     };
 }
 eventsRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(event_controller_1.createEventController));
+eventsRouter.get('/public', (0, validate_middleware_1.validateMiddleware)(listQueryValidator, 'query'), (0, async_handler_1.asyncHandler)(event_controller_1.getPublicEventsController));
 eventsRouter.get('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, validate_middleware_1.validateMiddleware)(listQueryValidator, 'query'), (0, async_handler_1.asyncHandler)(event_controller_1.getEventsController));
 eventsRouter.get('/my-events', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, validate_middleware_1.validateMiddleware)(listQueryValidator, 'query'), (0, async_handler_1.asyncHandler)(operations_controller_1.listMyEventsController));
 eventsRouter.get('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), async (req, res, next) => {
@@ -116,4 +132,5 @@ eventsRouter.post('/:id/reschedule', auth_middleware_1.authMiddleware, authoriza
 eventsRouter.post('/:id/cancel', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(approval_controller_1.cancelEventController));
 eventsRouter.post('/:id/staff', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(participant_controller_1.assignStaffController));
 eventsRouter.post('/:id/apply', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(participant_controller_1.applyAsParticipantController));
+eventsRouter.patch('/:id/participants/:participantId/status', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(participantStatusParamsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(participant_controller_1.updateParticipantStatusController));
 exports.default = eventsRouter;

@@ -73,7 +73,7 @@ function canTransitionEventStatus(fromStatus, toStatus) {
         pending: ['approved', 'rejected', 'rescheduled'],
         approved: ['approved', 'pending', 'rescheduled', 'rejected', 'completed'],
         rejected: ['rejected'],
-        rescheduled: ['pending', 'approved', 'rejected', 'completed'],
+        rescheduled: ['pending', 'approved', 'rejected', 'rescheduled', 'completed'],
         completed: ['completed'],
     };
     return allowed[fromStatus]?.includes(toStatus) ?? false;

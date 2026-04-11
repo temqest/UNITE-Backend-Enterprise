@@ -34,11 +34,11 @@ const ParticipantStatusUpdateSchema = zod_1.z.object({
     notes: zod_1.z.string().trim().optional().nullable(),
 });
 const VALID_STATUS_FLOW = {
-    applied: ['confirmed'],
+    applied: ['confirmed', 'participated', 'no_show'],
     confirmed: ['participated', 'no_show'],
-    participated: ['donated'],
-    donated: [],
-    no_show: [],
+    participated: ['donated', 'no_show'],
+    donated: ['participated', 'no_show'],
+    no_show: ['confirmed', 'participated'],
 };
 class EventParticipantsService {
     supabase;

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createEventController = createEventController;
 exports.getEventsController = getEventsController;
+exports.getPublicEventsController = getPublicEventsController;
 exports.updateEventController = updateEventController;
 exports.deleteEventController = deleteEventController;
 const zod_1 = require("zod");
@@ -168,6 +169,38 @@ async function getEventsController(req, res) {
         sendError(res, 500, {
             code: 'EVENT_LIST_ERROR',
             message: 'Unexpected error while fetching events.',
+            details: error,
+        });
+    }
+}
+async function getPublicEventsController(req, res) {
+    try {
+        const query = req.query ?? {};
+        const typeQuery = query.types ?? query.type;
+        const result = await eventService.listPublicEvents({
+            from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
+            to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
+            types: parseStringArray(typeQuery),
+            search: typeof query.search === 'string' ? query.search : undefined,
+            limit: typeof query.limit === 'string' ? Number(query.limit) : undefined,
+            offset: typeof query.offset === 'string' ? Number(query.offset) : undefined,
+            province: typeof query.province === 'string' ? query.province : undefined,
+            city: typeof query.city === 'string' ? query.city : undefined,
+        });
+        if (result.error || !result.data) {
+            sendError(res, 400, {
+                code: result.error?.code ?? 'PUBLIC_EVENT_LIST_FAILED',
+                message: result.error?.message ?? 'Failed to fetch public events.',
+                details: result.error?.details,
+            });
+            return;
+        }
+        res.status(200).json({ success: true, data: result.data });
+    }
+    catch (error) {
+        sendError(res, 500, {
+            code: 'PUBLIC_EVENT_LIST_ERROR',
+            message: 'Unexpected error while fetching public events.',
             details: error,
         });
     }

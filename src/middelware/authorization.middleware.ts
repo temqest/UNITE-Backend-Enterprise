@@ -128,7 +128,7 @@ export function authorize(permission: string) {
     }
 
     const user = req.user as Required<Pick<RequestUser, 'id'>> & RequestUser;
-    const authzService = await import('../services/auth/authorization.service');
+    const authzService = await import('../services/auth/authorization.service.js');
     const granted = await authzService.hasPermission(user, permission);
     if (!granted) {
       const authz = await authzService.resolveUserAuthorization(user);

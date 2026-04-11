@@ -56,6 +56,9 @@ const LEGACY_PERMISSION_MAP = {
     manage_org_settings: 'settings.update',
     manage_events: 'events.update',
     approve_events: 'events.approve',
+    'event.approve': 'events.approve',
+    'event.aprove': 'events.approve',
+    'events.aprove': 'events.approve',
     send_notifications: 'chat.write',
     view_logs: 'reports.read',
 };

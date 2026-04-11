@@ -28,14 +28,17 @@ function toActor(user) {
         is_active: user.is_active !== false,
     };
 }
-function parseEnumArray(input) {
-    if (typeof input !== 'string' || input.trim().length === 0) {
-        return undefined;
-    }
-    return input
-        .split(',')
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0);
+function parseEnumArray(input, allowedValues) {
+    const allowedSet = new Set(allowedValues);
+    const rawValues = Array.isArray(input)
+        ? input
+        : typeof input === 'string'
+            ? input.split(',')
+            : [];
+    const parsed = rawValues
+        .map((value) => String(value).trim())
+        .filter((value) => value.length > 0 && allowedSet.has(value));
+    return parsed.length > 0 ? parsed : undefined;
 }
 async function listMyEventsController(req, res) {
     try {
@@ -44,9 +47,11 @@ async function listMyEventsController(req, res) {
             return;
         }
         const query = req.query ?? {};
+        const allowedStatuses = ['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'];
+        const allowedTypes = ['blood_drive', 'training', 'advocacy', 'assembly'];
         const filter = {
-            statuses: parseEnumArray(query.status),
-            types: parseEnumArray(query.type),
+            statuses: parseEnumArray(query.status, allowedStatuses),
+            types: parseEnumArray(query.type, allowedTypes),
             from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
             to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
             search: typeof query.search === 'string' ? query.search : undefined,

@@ -10,7 +10,11 @@ function getEventWorkflowScope(extraData) {
     const geoScope = geoScopeRaw && typeof geoScopeRaw === 'object' && !Array.isArray(geoScopeRaw)
         ? geoScopeRaw
         : null;
-    return { geoScope };
+    const reviewerRaw = asRecord.reviewer_user_id;
+    const assignedReviewerUserId = typeof reviewerRaw === 'string' && reviewerRaw.trim().length > 0
+        ? reviewerRaw.trim()
+        : null;
+    return { geoScope, assignedReviewerUserId };
 }
 class EventActionsService {
     supabase;
@@ -52,16 +56,20 @@ class EventActionsService {
         }
         const workflowScope = getEventWorkflowScope(event.extra_data);
         const eventGeoScope = workflowScope.geoScope;
+        const assignedReviewerUserId = workflowScope.assignedReviewerUserId;
         const scopeMatch = (0, event_types_1.isGeoAreaMatch)(eventGeoScope, actor.geographic_area);
+        const canActAsAssignedReviewer = !assignedReviewerUserId || assignedReviewerUserId === actor.id;
         const canRequest = sameOrg &&
             (isRequester || (0, event_types_1.hasPermission)(actor, 'request_event_approval') || (0, event_types_1.hasRoleAtLeast)(actor, 'staff'));
         if (canRequest && ['requested', 'rescheduled'].includes(event.status)) {
             actions.add('request_approval');
         }
         const canReview = sameOrg &&
+            canActAsAssignedReviewer &&
             scopeMatch &&
             ((0, event_types_1.hasPermission)(actor, 'approve_events') || (0, event_types_1.hasRoleAtLeast)(actor, 'coordinator'));
-        if (canReview && ['requested', 'pending', 'rescheduled', 'approved'].includes(event.status)) {
+        const canRequesterReview = sameOrg && isRequester;
+        if ((canRequesterReview || canReview) && ['requested', 'pending', 'rescheduled', 'approved'].includes(event.status)) {
             actions.add('approve_event');
             actions.add('reject_event');
             actions.add('reschedule_event');
@@ -69,7 +77,7 @@ class EventActionsService {
         if (sameOrg && (isAdminLike || isRequester || (0, event_types_1.hasPermission)(actor, 'edit_events'))) {
             actions.add('edit_event');
         }
-        if (sameOrg && event.status === 'approved' && (canReview || isAdminLike)) {
+        if (sameOrg && canActAsAssignedReviewer && event.status === 'approved' && (canReview || isAdminLike)) {
             actions.add('cancel_published_event');
             actions.add('reschedule_published_event');
         }

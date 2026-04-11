@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.donorRouter = void 0;
+const express_1 = require("express");
+const donor_controller_1 = require("../../controllers/donor/donor.controller");
+const auth_middleware_1 = require("../../../../middelware/auth.middleware");
+const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
+const async_handler_1 = require("../../../../lib/async-handler");
+const donorRouter = (0, express_1.Router)();
+exports.donorRouter = donorRouter;
+donorRouter.post('/signup', (0, async_handler_1.asyncHandler)(donor_controller_1.donorSignupController));
+donorRouter.get('/events', (0, async_handler_1.asyncHandler)(donor_controller_1.listPublicDonorEventsController));
+donorRouter.post('/activate', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, (0, async_handler_1.asyncHandler)(donor_controller_1.activateDonorAccountController));
+donorRouter.get('/dashboard', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, (0, async_handler_1.asyncHandler)(donor_controller_1.getDonorDashboardController));
+donorRouter.get('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, (0, async_handler_1.asyncHandler)(donor_controller_1.getDonorProfileController));
+donorRouter.patch('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, (0, async_handler_1.asyncHandler)(donor_controller_1.updateDonorProfileController));
+donorRouter.post('/events/:id/apply', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, (0, async_handler_1.asyncHandler)(donor_controller_1.applyDonorToEventController));
+exports.default = donorRouter;

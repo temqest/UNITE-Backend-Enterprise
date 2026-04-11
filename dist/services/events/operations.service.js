@@ -272,8 +272,11 @@ class EventOperationsService {
         const participantUserIds = Array.from(new Set(participants
             .map((participant) => participant.participant_user_id)
             .filter((id) => typeof id === 'string' && id.length > 0)));
+        const participantDonorIds = Array.from(new Set(participants
+            .map((participant) => participant.participant_donor_id)
+            .filter((id) => typeof id === 'string' && id.length > 0)));
         const staffUserIds = Array.from(new Set(staff.map((entry) => entry.user_id)));
-        const allUserIds = Array.from(new Set([...participantUserIds, ...staffUserIds]));
+        const allUserIds = Array.from(new Set([...participantUserIds, ...participantDonorIds, ...staffUserIds]));
         let userMap = new Map();
         if (allUserIds.length > 0) {
             const { data: usersData, error: usersError } = await this.supabase
@@ -291,6 +294,8 @@ class EventOperationsService {
                 const last = String(row.last_name ?? '').trim();
                 const fullName = [first, last].filter(Boolean).join(' ').trim() || row.email;
                 userMap.set(row.id, {
+                    first_name: first,
+                    last_name: last,
                     full_name: fullName,
                     email: row.email,
                 });
@@ -317,7 +322,24 @@ class EventOperationsService {
                 ...participant,
                 participant_name: participant.participant_user_id
                     ? userMap.get(participant.participant_user_id)?.full_name ?? null
-                    : null,
+                    : participant.participant_donor_id
+                        ? userMap.get(participant.participant_donor_id)?.full_name ?? null
+                        : null,
+                participant_first_name: participant.participant_user_id
+                    ? userMap.get(participant.participant_user_id)?.first_name ?? null
+                    : participant.participant_donor_id
+                        ? userMap.get(participant.participant_donor_id)?.first_name ?? null
+                        : null,
+                participant_last_name: participant.participant_user_id
+                    ? userMap.get(participant.participant_user_id)?.last_name ?? null
+                    : participant.participant_donor_id
+                        ? userMap.get(participant.participant_donor_id)?.last_name ?? null
+                        : null,
+                participant_email: participant.participant_user_id
+                    ? userMap.get(participant.participant_user_id)?.email ?? null
+                    : participant.participant_donor_id
+                        ? userMap.get(participant.participant_donor_id)?.email ?? null
+                        : null,
             })),
             staff: staff.map((entry) => ({
                 ...entry,
@@ -358,6 +380,12 @@ class EventOperationsService {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'You do not have permission to update event results.'),
+                };
+            }
+            if (event.type !== 'blood_drive') {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('EVENT_RESULTS_NOT_SUPPORTED', 'Post-event donation and inventory updates are only supported for blood drive events.'),
                 };
             }
             const shouldMarkCompleted = parsed.mark_as_completed !== false;

@@ -609,10 +609,11 @@ class UserService {
                     error: toServiceError('FORBIDDEN', 'Requester cannot create staff for another organization.'),
                 };
             }
-            if (requester.role.type !== 'super_admin' || !requester.is_active) {
+            const isAllowedCreator = ['admin', 'super_admin'].includes(requester.role.type);
+            if (!isAllowedCreator || !requester.is_active) {
                 return {
                     data: null,
-                    error: toServiceError('FORBIDDEN', 'Only active super_admin can create staff users.'),
+                    error: toServiceError('FORBIDDEN', 'Only active admin or super_admin can create staff users.'),
                 };
             }
             if (parsed.role.type === 'super_admin') {
