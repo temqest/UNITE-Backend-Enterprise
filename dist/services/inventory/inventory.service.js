@@ -22,6 +22,8 @@ const RecordTransactionSchema = zod_1.z.object({
     reference_type: zod_1.z.string().trim().optional().nullable(),
     reference_id: zod_1.z.string().uuid().optional().nullable(),
 });
+const BASELINE_ROWS_TTL_MS = 10 * 60 * 1000;
+const baselineRowsEnsuredAtByOrg = new Map();
 function deriveStatus(currentStock, minThreshold) {
     if (currentStock <= 0) {
         return 'critical';
@@ -54,6 +56,10 @@ class InventoryService {
         this.supabase = supabase;
     }
     async ensureBaselineRows(orgId) {
+        const lastEnsuredAt = baselineRowsEnsuredAtByOrg.get(orgId);
+        if (lastEnsuredAt && Date.now() - lastEnsuredAt < BASELINE_ROWS_TTL_MS) {
+            return;
+        }
         const inventoryTable = this.supabase.from('blood_inventory');
         const { data, error } = await inventoryTable
             .select('blood_type')
@@ -77,6 +83,7 @@ class InventoryService {
         if (missingRows.length > 0) {
             await inventoryTable.insert(missingRows);
         }
+        baselineRowsEnsuredAtByOrg.set(orgId, Date.now());
     }
     toCard(bloodType, rows) {
         const currentStock = rows.reduce((sum, row) => sum + Math.max(0, row.quantity ?? 0), 0);

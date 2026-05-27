@@ -145,6 +145,7 @@ function toSessionUser(authUser, userData) {
         .trim();
     return {
         id: String(userData.id),
+        auth_id: String(authUser.id ?? userData.auth_id),
         email: String(userData.email),
         full_name: String(userData.full_name ?? (computedFullName || 'User')),
         phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
@@ -234,7 +235,9 @@ async function buildSessionForAuthUser(input) {
 }
 async function resolveGoogleAuthUser(accessToken) {
     const scopedClient = createTokenScopedClient(accessToken);
-    const { data, error } = await scopedClient.auth.getUser(accessToken);
+    // getUser() validates the token from the Authorization header
+    // Don't pass accessToken as parameter - it's already set in the header
+    const { data, error } = await scopedClient.auth.getUser();
     if (error || !data.user?.id || !data.user.email) {
         throw {
             code: auth_types_1.AuthErrorCode.INVALID_CREDENTIALS,

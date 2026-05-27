@@ -47,7 +47,7 @@ async function listMyEventsController(req, res) {
             return;
         }
         const query = req.query ?? {};
-        const allowedStatuses = ['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'];
+        const allowedStatuses = ['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'];
         const allowedTypes = ['blood_drive', 'training', 'advocacy', 'assembly'];
         const filter = {
             statuses: parseEnumArray(query.status, allowedStatuses),

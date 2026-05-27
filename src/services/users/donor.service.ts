@@ -911,8 +911,10 @@ export class DonorService {
     const offset = Math.max(params.offset ?? 0, 0);
 
     let query = eventsTable
-      .select('id, title, type, event_date, start_time, end_time, address, is_public, extra_data')
-      .eq('status', 'approved')
+      .select('id, title, type, event_date, start_time, end_time, address, is_public, visibility, setup_status, extra_data')
+      .eq('status', 'published')
+      .eq('setup_status', 'complete')
+      .or('visibility.eq.public,is_public.eq.true')
       .order('event_date', { ascending: true })
       .order('start_time', { ascending: true })
       .range(offset, offset + limit - 1);
@@ -1025,7 +1027,8 @@ export class DonorService {
     }
 
     const { data: eventRow, error: eventError } = await eventsTable
-      .select('id, org_id, status, is_public, extra_data')
+      .select('id, org_id, status, is_public, visibility, extra_data')
+      .eq('setup_status', 'complete')
       .eq('id', eventId)
       .single();
 
@@ -1036,7 +1039,7 @@ export class DonorService {
       };
     }
 
-    if (!['approved', 'pending', 'rescheduled'].includes(String(eventRow.status))) {
+    if (String(eventRow.status) !== 'published') {
       return {
         data: null,
         error: toServiceError('INVALID_EVENT_STATE', 'This event is not open for donor signup.'),

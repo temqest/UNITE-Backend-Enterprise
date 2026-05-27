@@ -21,11 +21,17 @@ function rateLimitErrorHandler(_req: Request, res: Response): void {
   });
 }
 
+// Skip rate limiting if we can't determine a client IP (failsafe for proxy issues)
+function skipIfNoIp(req: Request): boolean {
+  return !req.ip;
+}
+
 export const authLoginRateLimiter = rateLimit({
   windowMs: getEnvInt('AUTH_LOGIN_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000),
   max: getEnvInt('AUTH_LOGIN_RATE_LIMIT_MAX', 10),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipIfNoIp,
   handler: rateLimitErrorHandler,
 });
 
@@ -34,6 +40,7 @@ export const authOtpRateLimiter = rateLimit({
   max: getEnvInt('AUTH_OTP_RATE_LIMIT_MAX', 5),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipIfNoIp,
   handler: rateLimitErrorHandler,
 });
 
@@ -42,6 +49,7 @@ export const notificationsReadRateLimiter = rateLimit({
   max: getEnvInt('NOTIFICATIONS_READ_RATE_LIMIT_MAX', 60),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipIfNoIp,
   handler: rateLimitErrorHandler,
 });
 
@@ -50,5 +58,6 @@ export const notificationsWriteRateLimiter = rateLimit({
   max: getEnvInt('NOTIFICATIONS_WRITE_RATE_LIMIT_MAX', 20),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipIfNoIp,
   handler: rateLimitErrorHandler,
 });

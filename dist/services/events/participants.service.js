@@ -95,7 +95,7 @@ class EventParticipantsService {
                     error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'This event is not open for your organization context.'),
                 };
             }
-            if (!['approved', 'pending', 'rescheduled'].includes(event.status)) {
+            if (!['scheduled', 'published', 'ongoing'].includes(event.status)) {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('INVALID_EVENT_STATE', 'Cannot apply to this event in its current status.'),

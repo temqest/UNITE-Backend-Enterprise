@@ -32,6 +32,9 @@ const RecordTransactionSchema = z.object({
   reference_id: z.string().uuid().optional().nullable(),
 });
 
+const BASELINE_ROWS_TTL_MS = 10 * 60 * 1000;
+const baselineRowsEnsuredAtByOrg = new Map<string, number>();
+
 function deriveStatus(currentStock: number, minThreshold: number): 'safe' | 'low' | 'critical' {
   if (currentStock <= 0) {
     return 'critical';
@@ -70,6 +73,11 @@ export class InventoryService {
   constructor(private readonly supabase: SupabaseClient) {}
 
   private async ensureBaselineRows(orgId: string): Promise<void> {
+    const lastEnsuredAt = baselineRowsEnsuredAtByOrg.get(orgId);
+    if (lastEnsuredAt && Date.now() - lastEnsuredAt < BASELINE_ROWS_TTL_MS) {
+      return;
+    }
+
     const inventoryTable = this.supabase.from('blood_inventory') as any;
 
     const { data, error } = await inventoryTable
@@ -97,6 +105,8 @@ export class InventoryService {
     if (missingRows.length > 0) {
       await inventoryTable.insert(missingRows);
     }
+
+    baselineRowsEnsuredAtByOrg.set(orgId, Date.now());
   }
 
   private toCard(bloodType: BloodType, rows: BloodInventoryRow[]): BloodTypeInventoryCard {

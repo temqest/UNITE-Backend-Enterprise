@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.assignStaffController = assignStaffController;
 exports.applyAsParticipantController = applyAsParticipantController;
 exports.updateParticipantStatusController = updateParticipantStatusController;
+exports.bulkUpdateParticipantStatusController = bulkUpdateParticipantStatusController;
 const zod_1 = require("zod");
 const participants_service_1 = require("../../../../services/events/participants.service");
 const staff_service_1 = require("../../../../services/events/staff.service");
@@ -35,6 +36,16 @@ const updateParticipantStatusValidator = {
         .object({
         event_id: zod_1.z.string().uuid().optional(),
         participant_id: zod_1.z.string().uuid().optional(),
+        status: zod_1.z.enum(['applied', 'confirmed', 'participated', 'donated', 'no_show']),
+        notes: zod_1.z.string().optional().nullable(),
+    })
+        .safeParse(payload),
+};
+const bulkUpdateParticipantStatusValidator = {
+    validate: (payload) => zod_1.z
+        .object({
+        event_id: zod_1.z.string().uuid().optional(),
+        participant_ids: zod_1.z.array(zod_1.z.string().uuid()).min(1).max(100),
         status: zod_1.z.enum(['applied', 'confirmed', 'participated', 'donated', 'no_show']),
         notes: zod_1.z.string().optional().nullable(),
     })
@@ -210,6 +221,72 @@ async function updateParticipantStatusController(req, res) {
         sendError(res, 500, {
             code: 'PARTICIPANT_STATUS_UPDATE_ERROR',
             message: 'Unexpected error while updating participant status.',
+            details: error,
+        });
+    }
+}
+async function bulkUpdateParticipantStatusController(req, res) {
+    try {
+        if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+            sendError(res, 401, {
+                code: 'UNAUTHORIZED',
+                message: 'Active authenticated organization user required.',
+            });
+            return;
+        }
+        const parsed = bulkUpdateParticipantStatusValidator.validate(req.body ?? {});
+        if (!parsed.success) {
+            sendError(res, 400, {
+                code: 'VALIDATION_ERROR',
+                message: 'Invalid bulk participant status payload.',
+                details: parsed.error.issues,
+            });
+            return;
+        }
+        const eventId = parsed.data.event_id ?? req.params?.eventId ?? req.params?.id;
+        if (!eventId) {
+            sendError(res, 400, {
+                code: 'EVENT_ID_REQUIRED',
+                message: 'event_id or eventId path parameter is required.',
+            });
+            return;
+        }
+        const actor = toActor(req.user);
+        const updates = await Promise.all(parsed.data.participant_ids.map(async (participantId) => {
+            const result = await participantsService.updateParticipantStatus(actor, {
+                event_id: eventId,
+                participant_id: participantId,
+                status: parsed.data.status,
+                notes: parsed.data.notes ?? undefined,
+            });
+            return {
+                participant_id: participantId,
+                success: Boolean(result.data && !result.error),
+                data: result.data,
+                error: result.error,
+            };
+        }));
+        const updated = updates.filter((entry) => entry.success).map((entry) => entry.data);
+        const failed = updates
+            .filter((entry) => !entry.success)
+            .map((entry) => ({
+            participant_id: entry.participant_id,
+            error: entry.error,
+        }));
+        res.status(200).json({
+            success: true,
+            data: {
+                updated,
+                failed,
+                updated_count: updated.length,
+                failed_count: failed.length,
+            },
+        });
+    }
+    catch (error) {
+        sendError(res, 500, {
+            code: 'BULK_PARTICIPANT_STATUS_UPDATE_ERROR',
+            message: 'Unexpected error while updating participant statuses.',
             details: error,
         });
     }

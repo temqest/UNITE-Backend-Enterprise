@@ -25,8 +25,9 @@ function hasPermission(user, permission) {
     if (user.role.type === 'super_admin') {
         return true;
     }
-    const permissions = user.role.permissions ?? [];
-    return permissions.includes('*') || permissions.includes(permission);
+    const requested = normalizePermission(permission);
+    const permissions = new Set((user.role.permissions ?? []).map(normalizePermission).filter(Boolean));
+    return permissions.has('*') || permissions.has(requested);
 }
 function getRoleRank(roleType) {
     return exports.ROLE_HIERARCHY[roleType] ?? -1;
@@ -69,18 +70,37 @@ function isGeoAreaMatch(source, target) {
 }
 function canTransitionEventStatus(fromStatus, toStatus) {
     const allowed = {
-        requested: ['pending', 'approved', 'rejected', 'rescheduled'],
-        pending: ['approved', 'rejected', 'rescheduled'],
-        approved: ['approved', 'pending', 'rescheduled', 'rejected', 'completed'],
-        rejected: ['rejected'],
-        rescheduled: ['pending', 'approved', 'rejected', 'rescheduled', 'completed'],
+        draft: ['draft', 'needs_details', 'scheduled', 'published', 'cancelled'],
+        plotted: ['plotted', 'needs_details', 'scheduled', 'published', 'cancelled'],
+        needs_details: ['needs_details', 'scheduled', 'published', 'cancelled'],
+        scheduled: ['scheduled', 'needs_details', 'published', 'ongoing', 'completed', 'cancelled'],
+        published: ['published', 'scheduled', 'ongoing', 'completed', 'cancelled'],
+        ongoing: ['ongoing', 'completed', 'cancelled'],
         completed: ['completed'],
+        cancelled: ['cancelled'],
     };
     return allowed[fromStatus]?.includes(toStatus) ?? false;
 }
 function buildEventSearchText(event) {
-    return [event.title, event.address, event.description ?? ''].join(' ').toLowerCase();
+    return [event.title, event.address ?? '', event.description ?? ''].join(' ').toLowerCase();
 }
 function isActiveParticipantStatus(status) {
     return status === 'applied' || status === 'confirmed' || status === 'participated' || status === 'donated';
+}
+function normalizePermission(permission) {
+    const normalized = permission.trim().toLowerCase();
+    if (!normalized) {
+        return normalized;
+    }
+    const aliases = {
+        create_events: 'events.create',
+        manage_events: 'events.update',
+        edit_events: 'events.update',
+        view_events: 'events.read',
+        approve_events: 'events.approve',
+        auto_approve_events: 'events.approve',
+        assign_event_staff: 'events.update',
+        manage_event_participants: 'events.update',
+    };
+    return aliases[normalized] ?? normalized.replace(/_/g, '.');
 }

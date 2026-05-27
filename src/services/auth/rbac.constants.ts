@@ -52,12 +52,18 @@ export const PERMISSION_CATALOG = [
 export type PermissionName = (typeof PERMISSION_CATALOG)[number];
 
 const LEGACY_PERMISSION_MAP: Record<string, string> = {
+  create_events: 'events.create',
   approve_staff: 'users.approve',
   manage_staff: 'users.invite',
   manage_users: 'users.invite',
   manage_org_settings: 'settings.update',
   manage_events: 'events.update',
+  edit_events: 'events.update',
+  view_events: 'events.read',
   approve_events: 'events.approve',
+  auto_approve_events: 'events.approve',
+  assign_event_staff: 'events.update',
+  manage_event_participants: 'events.update',
   'event.approve': 'events.approve',
   'event.aprove': 'events.approve',
   'events.aprove': 'events.approve',

@@ -25,6 +25,21 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function buildDisplayName(userData: any): string {
+  const explicitName = String(userData?.full_name ?? '').trim();
+  if (explicitName.length > 0) {
+    return explicitName;
+  }
+
+  const derivedName = [userData?.first_name, userData?.last_name]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return derivedName || 'User';
+}
+
 async function resolveOrLinkUserProfile(authUserId: string, email?: string | null): Promise<any> {
   const { data: byAuthId, error: byAuthIdError } = await supabase
     .from('users')
@@ -151,9 +166,10 @@ export async function loginWithEmailPassword(
 
     const sessionUser: SessionUser = {
       id: userData.id,
+      auth_id: authData.user.id,
       email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
+      full_name: buildDisplayName(userData),
+      phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
       org_id: userData.org_id,
       role: userData.role as UserRole,
       is_active: userData.is_active,
@@ -290,9 +306,10 @@ export async function verifyMagicLink(
 
     const sessionUser: SessionUser = {
       id: userData.id,
+      auth_id: authData.user.id,
       email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
+      full_name: buildDisplayName(userData),
+      phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
       org_id: userData.org_id,
       role: userData.role as UserRole,
       is_active: userData.is_active,

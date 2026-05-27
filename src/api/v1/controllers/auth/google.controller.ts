@@ -1,13 +1,11 @@
+import type { Request, Response } from 'express';
 import { completeGoogleSignup, exchangeGoogleSession } from '../../../../services/auth';
-
-interface Request {
-  body?: Record<string, unknown>;
-}
-
-interface Response {
-  status: (code: number) => Response;
-  json: (body: unknown) => void;
-}
+import {
+  getRequestSessionMetadata,
+  setRefreshCookie,
+  stripRefreshToken,
+  tryCreateAppRefreshSession,
+} from '../../../../services/auth/http-session.service';
 
 interface ApiError {
   code: string;
@@ -42,6 +40,29 @@ export async function exchangeGoogleSessionController(req: Request, res: Respons
       refreshToken,
     });
 
+    if (result.status === 'complete' && result.session.refreshToken) {
+      const persistence = await tryCreateAppRefreshSession(
+        result.session.user,
+        result.session.refreshToken,
+        result.session.accessToken,
+        getRequestSessionMetadata(req)
+      );
+
+      if (persistence.ok) {
+        setRefreshCookie(res, result.session.refreshToken);
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          ...result,
+          session: stripRefreshToken(result.session),
+          ...(persistence.warning ? { refreshWarning: persistence.warning } : {}),
+        },
+      });
+      return;
+    }
+
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     const err = error as Partial<ApiError>;
@@ -73,10 +94,10 @@ export async function completeGoogleSignupController(req: Request, res: Response
       return;
     }
 
-    if (role !== 'admin' && role !== 'staff') {
+    if (role !== 'admin' && role !== 'staff' && role !== 'donor') {
       sendError(res, 400, {
         code: 'VALIDATION_ERROR',
-        message: "role must be either 'admin' or 'staff'.",
+        message: "role must be 'admin', 'staff', or 'donor'.",
       });
       return;
     }
@@ -93,14 +114,40 @@ export async function completeGoogleSignupController(req: Request, res: Response
     const session = await completeGoogleSignup({
       accessToken,
       refreshToken,
-      role,
+      role: role as 'admin' | 'staff' | 'donor',
       firstName,
       lastName,
+      blood_type: typeof body.blood_type === 'string' ? body.blood_type as any : undefined,
+      phone_number: typeof body.phone_number === 'string' ? body.phone_number : undefined,
+      province: typeof body.province === 'string' ? body.province : undefined,
+      city: typeof body.city === 'string' ? body.city : undefined,
       organization,
       org_code: orgCode,
     });
 
-    res.status(200).json({ success: true, data: session });
+    if (session.refreshToken) {
+      const persistence = await tryCreateAppRefreshSession(
+        session.user,
+        session.refreshToken,
+        session.accessToken,
+        getRequestSessionMetadata(req)
+      );
+
+      if (persistence.ok) {
+        setRefreshCookie(res, session.refreshToken);
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          ...stripRefreshToken(session),
+          ...(persistence.warning ? { refreshWarning: persistence.warning } : {}),
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: stripRefreshToken(session) });
   } catch (error) {
     const err = error as Partial<ApiError>;
     const code = err.code ?? 'GOOGLE_SIGNUP_COMPLETION_FAILED';

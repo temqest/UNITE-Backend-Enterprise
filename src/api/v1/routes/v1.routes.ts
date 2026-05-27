@@ -8,12 +8,14 @@ import { organizationsRouter } from './organizations';
 import { geographicRouter } from './geographic';
 import { inventoryRouter } from './inventory';
 import { donorRouter } from './donor';
+import { plottingCalendarsRouter } from './plotting-calendars';
 
 const v1Router = Router();
 
 v1Router.use('/auth', authRouter);
 v1Router.use('/users', usersRouter);
 v1Router.use('/events', eventsRouter);
+v1Router.use('/plotting-calendars', plottingCalendarsRouter);
 v1Router.use('/notifications', notificationsRouter);
 v1Router.use('/settings', settingsRouter);
 v1Router.use('/organizations', organizationsRouter);

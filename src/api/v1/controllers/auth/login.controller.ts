@@ -1,20 +1,12 @@
+import type { Request, Response } from 'express';
 import { loginWithEmailPassword } from '../../../../services/auth';
+import {
+  getRequestSessionMetadata,
+  setRefreshCookie,
+  stripRefreshToken,
+  tryCreateAppRefreshSession,
+} from '../../../../services/auth/http-session.service';
 import { validateLogin } from '../../validators/auth';
-
-interface AuthenticatedUser {
-  id: string;
-  is_active?: boolean;
-}
-
-interface Request {
-  body?: unknown;
-  user?: AuthenticatedUser;
-}
-
-interface Response {
-  status: (code: number) => Response;
-  json: (body: unknown) => void;
-}
 
 interface ApiError {
   code: string;
@@ -39,10 +31,29 @@ export async function loginController(req: Request, res: Response): Promise<void
     }
 
     const result = await loginWithEmailPassword(validation.data);
+    let refreshWarning: { code: string; message: string } | undefined;
+
+    if (result.refreshToken) {
+      const persistence = await tryCreateAppRefreshSession(
+        result.user,
+        result.refreshToken,
+        result.accessToken,
+        getRequestSessionMetadata(req)
+      );
+
+      if (persistence.ok) {
+        setRefreshCookie(res, result.refreshToken);
+      } else {
+        refreshWarning = persistence.warning;
+      }
+    }
 
     res.status(200).json({
       success: true,
-      data: result,
+      data: {
+        ...stripRefreshToken(result),
+        ...(refreshWarning ? { refreshWarning } : {}),
+      },
     });
   } catch (error) {
     const authError = error as Partial<ApiError>;

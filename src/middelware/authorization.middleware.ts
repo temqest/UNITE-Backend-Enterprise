@@ -4,6 +4,7 @@ type RequestUser = {
   id?: string;
   org_id?: string;
   is_active?: boolean;
+  canonical_role?: string;
   role?: {
     type?: string;
     permissions?: string[];
@@ -113,6 +114,39 @@ export function requireOrgScope(req: AuthRequest, res: Response, next: NextFunct
   next();
 }
 
+export function requireRole(...allowedRoles: string[]) {
+  const allowed = new Set(allowedRoles.map((role) => role.trim().toLowerCase()).filter(Boolean));
+
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user?.id) {
+      logDecision(req, {
+        userId: 'anonymous',
+        role: 'unknown',
+        orgId: 'none',
+        decision: 'deny',
+        reasonCode: 'UNAUTHORIZED',
+      });
+      sendError(res, 401, 'UNAUTHORIZED', 'Authenticated user required.');
+      return;
+    }
+
+    const role = String(req.user.canonical_role ?? req.user.role?.type ?? '').trim().toLowerCase();
+    if (!allowed.has(role)) {
+      logDecision(req, {
+        userId: req.user.id,
+        role: role || 'unknown',
+        orgId: req.user.org_id ?? 'none',
+        decision: 'deny',
+        reasonCode: 'FORBIDDEN_ROLE_REQUIRED',
+      });
+      sendError(res, 403, 'FORBIDDEN', 'You do not have permission to access this resource.');
+      return;
+    }
+
+    next();
+  };
+}
+
 export function authorize(permission: string) {
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user?.id) {
@@ -128,7 +162,7 @@ export function authorize(permission: string) {
     }
 
     const user = req.user as Required<Pick<RequestUser, 'id'>> & RequestUser;
-    const authzService = await import('../services/auth/authorization.service.js');
+    const authzService = require('../services/auth/authorization.service');
     const granted = await authzService.hasPermission(user, permission);
     if (!granted) {
       const authz = await authzService.resolveUserAuthorization(user);

@@ -26,6 +26,17 @@ export {
 } from './session.service';
 
 export {
+  createAppRefreshSession,
+  tryCreateAppRefreshSession,
+  refreshAppSessionFromRequest,
+  revokeRefreshSessionFromRequest,
+  revokeSupabaseSessionFromRequest,
+  setRefreshCookie,
+  clearRefreshCookie,
+  stripRefreshToken,
+} from './http-session.service';
+
+export {
   resolveUserAuthorization,
   hasPermission,
   getFallbackPermissions,
