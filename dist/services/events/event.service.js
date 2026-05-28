@@ -225,7 +225,7 @@ class EventService {
                 id: row.id,
                 first_name: first,
                 last_name: last,
-                full_name: [first, last].filter(Boolean).join(' ').trim() || 'Unknown requester',
+                full_name: [first, last].filter(Boolean).join(' ').trim() || 'Unknown creator',
             });
         }
         return {
@@ -236,60 +236,17 @@ class EventService {
             error: null,
         };
     }
-    async withLatestApproval(events) {
-        const eventIds = Array.from(new Set(events.map((event) => event.id).filter(Boolean)));
-        if (eventIds.length === 0) {
-            return { data: events, error: null };
-        }
-        const { data, error } = await this.supabase
-            .from('event_approvals')
-            .select('event_id, action, acted_by_user_id, to_status, notes, created_at')
-            .in('event_id', eventIds)
-            .order('created_at', { ascending: false });
-        if (error) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('EVENT_LATEST_APPROVAL_LOOKUP_FAILED', 'Failed to fetch latest approval details.', error),
-            };
-        }
-        const latestByEventId = new Map();
-        for (const row of (data ?? [])) {
-            if (!latestByEventId.has(row.event_id)) {
-                latestByEventId.set(row.event_id, {
-                    action: row.action,
-                    acted_by_user_id: row.acted_by_user_id,
-                    to_status: row.to_status,
-                    notes: row.notes,
-                    created_at: row.created_at,
-                });
-            }
-        }
-        return {
-            data: events.map((event) => ({
-                ...event,
-                latest_approval: latestByEventId.get(event.id) ?? null,
-            })),
-            error: null,
-        };
-    }
     async enrichEvents(events) {
-        const [withRequesterResult, withLatestApprovalResult] = await Promise.all([
-            this.withRequester(events),
-            this.withLatestApproval(events),
-        ]);
+        const withRequesterResult = await this.withRequester(events);
         if (withRequesterResult.error || !withRequesterResult.data) {
             return { data: null, error: withRequesterResult.error };
         }
-        if (withLatestApprovalResult.error || !withLatestApprovalResult.data) {
-            return { data: null, error: withLatestApprovalResult.error };
-        }
         const requesterById = new Map(withRequesterResult.data.map((event) => [event.id, event.requested_by ?? null]));
-        const approvalById = new Map(withLatestApprovalResult.data.map((event) => [event.id, event.latest_approval ?? null]));
         return {
             data: events.map((event) => ({
                 ...event,
                 requested_by: requesterById.get(event.id) ?? null,
-                latest_approval: approvalById.get(event.id) ?? null,
+                latest_approval: null,
             })),
             error: null,
         };

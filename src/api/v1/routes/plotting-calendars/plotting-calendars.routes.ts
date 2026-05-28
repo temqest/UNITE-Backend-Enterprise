@@ -2,10 +2,12 @@ import { Router } from 'express';
 import {
   createPlottingCalendarController,
   deletePlottingCalendarController,
+  getPlottingCalendarAvailabilityController,
   getPlottingCalendarAvailableSlotsController,
   getPlottingCalendarController,
   listPlottingCalendarsController,
   plotEventFromCalendarController,
+  savePlottingCalendarAvailabilityController,
   updatePlottingCalendarController,
 } from '../../controllers/events/plotting-calendar.controller';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
@@ -19,6 +21,8 @@ plottingCalendarsRouter.get('/:id', authMiddleware, requireActiveUser, requireOr
 plottingCalendarsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), asyncHandler(createPlottingCalendarController as any));
 plottingCalendarsRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), asyncHandler(updatePlottingCalendarController as any));
 plottingCalendarsRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.delete'), asyncHandler(deletePlottingCalendarController as any));
+plottingCalendarsRouter.get('/:id/availability', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(getPlottingCalendarAvailabilityController as any));
+plottingCalendarsRouter.put('/:id/availability', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), asyncHandler(savePlottingCalendarAvailabilityController as any));
 plottingCalendarsRouter.get('/:id/available-slots', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(getPlottingCalendarAvailableSlotsController as any));
 plottingCalendarsRouter.post('/:id/plot-event', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), asyncHandler(plotEventFromCalendarController as any));
 

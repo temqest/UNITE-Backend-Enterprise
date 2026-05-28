@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PlottingCalendarService } from '../../../../services/events/plotting-calendar.service';
 import type { EventActorContext, PlottingCalendarFilter } from '../../../../services/events/event.types';
-import type { PlottingCalendarCreateInput, PlottingCalendarUpdateInput } from '../../../../models/events/types';
+import type { PlottingCalendarAvailabilityInput, PlottingCalendarCreateInput, PlottingCalendarUpdateInput } from '../../../../models/events/types';
 import { supabaseServer } from '../../../../lib/supabase/supabase.client';
 
 interface UserRole {
@@ -213,6 +213,61 @@ export async function getPlottingCalendarAvailableSlotsController(req: Request, 
     res.status(200).json({ success: true, data: result.data });
   } catch (error) {
     sendError(res, 500, 'PLOTTING_CALENDAR_SLOTS_ERROR', 'Unexpected error while fetching available slots.', error);
+  }
+}
+
+export async function getPlottingCalendarAvailabilityController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const calendarId = req.params?.id;
+    if (!calendarId) {
+      sendError(res, 400, 'PLOTTING_CALENDAR_ID_REQUIRED', 'id path parameter is required.');
+      return;
+    }
+
+    const result = await plottingCalendarService.getAvailability(toActor(user), calendarId, {
+      from: typeof req.query?.from === 'string' ? req.query.from : undefined,
+      to: typeof req.query?.to === 'string' ? req.query.to : undefined,
+    });
+
+    if (result.error || !result.data) {
+      sendError(res, 400, result.error?.code ?? 'PLOTTING_AVAILABILITY_FAILED', result.error?.message ?? 'Failed to load availability.', result.error?.details);
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, 'PLOTTING_AVAILABILITY_ERROR', 'Unexpected error while fetching availability.', error);
+  }
+}
+
+export async function savePlottingCalendarAvailabilityController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const calendarId = req.params?.id;
+    if (!calendarId) {
+      sendError(res, 400, 'PLOTTING_CALENDAR_ID_REQUIRED', 'id path parameter is required.');
+      return;
+    }
+
+    const result = await plottingCalendarService.upsertAvailability(
+      toActor(user),
+      calendarId,
+      (req.body ?? {}) as unknown as PlottingCalendarAvailabilityInput
+    );
+
+    if (result.error || !result.data) {
+      sendError(res, 400, result.error?.code ?? 'PLOTTING_AVAILABILITY_SAVE_FAILED', result.error?.message ?? 'Failed to save availability.', result.error?.details);
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, 'PLOTTING_AVAILABILITY_SAVE_ERROR', 'Unexpected error while saving availability.', error);
   }
 }
 

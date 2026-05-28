@@ -2,6 +2,16 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS public.plotting_calendars (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -25,12 +35,22 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
   CONSTRAINT plotting_calendars_allowed_dates_is_array CHECK (jsonb_typeof(allowed_dates) = 'array'),
   CONSTRAINT plotting_calendars_allowed_time_slots_is_array CHECK (jsonb_typeof(allowed_time_slots) = 'array'),
   CONSTRAINT plotting_calendars_access_type_check CHECK (access_type IN ('org', 'users', 'organizations', 'share_token')),
-  CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'inactive', 'expired', 'archived')),
+  CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'closed', 'expired', 'archived')),
   CONSTRAINT plotting_calendars_limits_non_negative CHECK (
     (max_events_per_date IS NULL OR max_events_per_date > 0)
     AND (max_events_per_slot IS NULL OR max_events_per_slot > 0)
   )
 );
+
+ALTER TABLE public.plotting_calendars
+  DROP CONSTRAINT IF EXISTS plotting_calendars_status_check;
+
+UPDATE public.plotting_calendars
+SET status = 'closed'
+WHERE status = 'inactive';
+
+ALTER TABLE public.plotting_calendars
+  ADD CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'closed', 'expired', 'archived'));
 
 ALTER TABLE public.events
   ADD COLUMN IF NOT EXISTS creation_method TEXT NOT NULL DEFAULT 'manual',
@@ -97,6 +117,94 @@ CREATE INDEX IF NOT EXISTS plotting_calendars_allowed_time_slots_gin_idx
 CREATE INDEX IF NOT EXISTS plotting_calendars_allowed_event_types_gin_idx
   ON public.plotting_calendars USING GIN (allowed_event_types);
 
+CREATE TABLE IF NOT EXISTS public.plotting_calendar_days (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plotting_calendar_id UUID NOT NULL REFERENCES public.plotting_calendars(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  max_events_for_day INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT plotting_calendar_days_unique_date UNIQUE (plotting_calendar_id, date),
+  CONSTRAINT plotting_calendar_days_status_check CHECK (status IN ('open', 'unavailable', 'fully_booked')),
+  CONSTRAINT plotting_calendar_days_capacity_positive CHECK (max_events_for_day IS NULL OR max_events_for_day > 0)
+);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_days_calendar_date_idx
+  ON public.plotting_calendar_days (plotting_calendar_id, date);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_days_status_idx
+  ON public.plotting_calendar_days (plotting_calendar_id, status, date);
+
+DROP TRIGGER IF EXISTS trg_plotting_calendar_days_set_updated_at ON public.plotting_calendar_days;
+CREATE TRIGGER trg_plotting_calendar_days_set_updated_at
+BEFORE UPDATE ON public.plotting_calendar_days
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.plotting_calendar_time_slots (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plotting_calendar_day_id UUID NOT NULL REFERENCES public.plotting_calendar_days(id) ON DELETE CASCADE,
+  starts_at TIME NOT NULL,
+  ends_at TIME NOT NULL,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  max_events_for_slot INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT plotting_calendar_time_slots_unique_window UNIQUE (plotting_calendar_day_id, starts_at, ends_at),
+  CONSTRAINT plotting_calendar_time_slots_status_check CHECK (status IN ('open', 'unavailable', 'fully_booked')),
+  CONSTRAINT plotting_calendar_time_slots_capacity_positive CHECK (max_events_for_slot IS NULL OR max_events_for_slot > 0),
+  CONSTRAINT plotting_calendar_time_slots_window_check CHECK (ends_at > starts_at)
+);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_time_slots_day_status_idx
+  ON public.plotting_calendar_time_slots (plotting_calendar_day_id, status, starts_at);
+
+DROP TRIGGER IF EXISTS trg_plotting_calendar_time_slots_set_updated_at ON public.plotting_calendar_time_slots;
+CREATE TRIGGER trg_plotting_calendar_time_slots_set_updated_at
+BEFORE UPDATE ON public.plotting_calendar_time_slots
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+INSERT INTO public.plotting_calendar_days (
+  plotting_calendar_id,
+  date,
+  status,
+  max_events_for_day
+)
+SELECT
+  pc.id,
+  allowed_date.value::date,
+  'open',
+  pc.max_events_per_date
+FROM public.plotting_calendars pc
+CROSS JOIN LATERAL jsonb_array_elements_text(pc.allowed_dates) AS allowed_date(value)
+ON CONFLICT (plotting_calendar_id, date) DO NOTHING;
+
+INSERT INTO public.plotting_calendar_time_slots (
+  plotting_calendar_day_id,
+  starts_at,
+  ends_at,
+  label,
+  status,
+  max_events_for_slot
+)
+SELECT
+  pcd.id,
+  (slot.value ->> 'start_time')::time,
+  (slot.value ->> 'end_time')::time,
+  NULLIF(slot.value ->> 'label', ''),
+  'open',
+  pc.max_events_per_slot
+FROM public.plotting_calendar_days pcd
+JOIN public.plotting_calendars pc ON pc.id = pcd.plotting_calendar_id
+CROSS JOIN LATERAL jsonb_array_elements(pc.allowed_time_slots) AS slot(value)
+WHERE slot.value ? 'start_time'
+  AND slot.value ? 'end_time'
+ON CONFLICT (plotting_calendar_day_id, starts_at, ends_at) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS events_visibility_status_date_idx
   ON public.events (visibility, status, event_date);
 
@@ -150,3 +258,222 @@ CREATE TRIGGER trg_events_validate_status_transition
 BEFORE UPDATE ON public.events
 FOR EACH ROW
 EXECUTE FUNCTION public.validate_event_status_transition();
+
+CREATE OR REPLACE FUNCTION public.current_user_org_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT u.org_id
+  FROM public.users AS u
+  WHERE u.auth_id = auth.uid()
+    AND u.is_active = true
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_user_profile_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT u.id
+  FROM public.users AS u
+  WHERE u.auth_id = auth.uid()
+    AND u.is_active = true
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_user_role_type()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT u.role ->> 'type'
+  FROM public.users AS u
+  WHERE u.auth_id = auth.uid()
+    AND u.is_active = true
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_user_has_permission(required_permission TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users AS u
+    WHERE u.auth_id = auth.uid()
+      AND u.is_active = true
+      AND (
+        u.role ->> 'type' = 'super_admin'
+        OR (u.role -> 'permissions') ? required_permission
+      )
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_user_has_any_permission(required_permissions TEXT[])
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users AS u
+    WHERE u.auth_id = auth.uid()
+      AND u.is_active = true
+      AND (
+        u.role ->> 'type' = 'super_admin'
+        OR EXISTS (
+          SELECT 1
+          FROM unnest(required_permissions) AS permission_name
+          WHERE (u.role -> 'permissions') ? permission_name
+        )
+      )
+  );
+$$;
+
+DROP POLICY IF EXISTS events_select_same_org ON public.events;
+CREATE POLICY events_select_same_org
+ON public.events
+FOR SELECT
+USING (
+  org_id = public.current_user_org_id()
+  OR (status = 'published' AND setup_status = 'complete' AND (visibility = 'public' OR is_public = true))
+);
+
+ALTER TABLE public.plotting_calendar_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plotting_calendar_time_slots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS plotting_calendar_days_select_accessible ON public.plotting_calendar_days;
+CREATE POLICY plotting_calendar_days_select_accessible
+ON public.plotting_calendar_days
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendars calendar
+    WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_has_any_permission(ARRAY['events.read', 'view_events'])
+        OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+      )
+      AND (
+        calendar.access_type = 'org'
+        OR public.current_user_profile_id() = ANY(calendar.allowed_user_ids)
+        OR public.current_user_org_id() = ANY(calendar.allowed_organization_ids)
+        OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+      )
+  )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_days_manage ON public.plotting_calendar_days;
+CREATE POLICY plotting_calendar_days_manage
+ON public.plotting_calendar_days
+FOR ALL
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendars calendar
+    WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+        OR (
+          public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+          AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+        )
+      )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendars calendar
+    WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+        OR (
+          public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+          AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+        )
+      )
+  )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_time_slots_select_accessible ON public.plotting_calendar_time_slots;
+CREATE POLICY plotting_calendar_time_slots_select_accessible
+ON public.plotting_calendar_time_slots
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendar_days day
+    JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+    WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_has_any_permission(ARRAY['events.read', 'view_events'])
+        OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+      )
+      AND (
+        calendar.access_type = 'org'
+        OR public.current_user_profile_id() = ANY(calendar.allowed_user_ids)
+        OR public.current_user_org_id() = ANY(calendar.allowed_organization_ids)
+        OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+      )
+  )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_time_slots_manage ON public.plotting_calendar_time_slots;
+CREATE POLICY plotting_calendar_time_slots_manage
+ON public.plotting_calendar_time_slots
+FOR ALL
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendar_days day
+    JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+    WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+        OR (
+          public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+          AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+        )
+      )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.plotting_calendar_days day
+    JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+    WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+      AND calendar.org_id = public.current_user_org_id()
+      AND (
+        public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+        OR (
+          public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+          AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+        )
+      )
+  )
+);

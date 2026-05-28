@@ -39,13 +39,18 @@ const eventsListQuerySchema = zod_1.z.object({
         .transform((value) => Number.parseInt(value, 10))
         .optional(),
     status: zod_1.z.string().optional(),
+    statuses: zod_1.z.string().optional(),
     setup_status: zod_1.z.string().optional(),
     setup_statuses: zod_1.z.string().optional(),
+    creation_method: zod_1.z.string().optional(),
+    creation_methods: zod_1.z.string().optional(),
     type: zod_1.z.string().optional(),
+    types: zod_1.z.string().optional(),
     from_date: zod_1.z.string().optional(),
     to_date: zod_1.z.string().optional(),
     province: zod_1.z.string().optional(),
     city: zod_1.z.string().optional(),
+    hosting_organization: zod_1.z.string().optional(),
     search: zod_1.z.string().optional(),
     include_public: zod_1.z.union([zod_1.z.literal('true'), zod_1.z.literal('false')]).optional(),
     include_archived: zod_1.z.union([zod_1.z.literal('true'), zod_1.z.literal('false')]).optional(),
@@ -131,6 +136,7 @@ eventsRouter.patch('/:id/results', auth_middleware_1.authMiddleware, authorizati
 eventsRouter.patch('/:id/complete-details', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(event_controller_1.completeEventDetailsController));
 eventsRouter.patch('/:id/status', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(event_controller_1.patchEventStatusController));
 eventsRouter.patch('/:id/publish', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, async_handler_1.asyncHandler)(event_controller_1.publishEventController));
+eventsRouter.patch('/:id/cancel', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(approval_controller_1.cancelEventController));
 eventsRouter.patch('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(event_controller_1.updateEventController));
 eventsRouter.delete('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, async_handler_1.asyncHandler)(event_controller_1.deleteEventController));
 eventsRouter.post('/:id/approve', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.approve'), (0, validate_middleware_1.validateMiddleware)(paramsValidator, 'params'), (0, validate_middleware_1.validateMiddleware)(passthroughValidator), (0, async_handler_1.asyncHandler)(event_controller_1.deprecatedEventWorkflowController));

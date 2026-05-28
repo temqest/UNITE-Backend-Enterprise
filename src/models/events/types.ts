@@ -233,7 +233,9 @@ export interface EventApprovalCreateInput {
 }
 
 export type PlottingCalendarAccessType = 'org' | 'users' | 'organizations' | 'share_token';
-export type PlottingCalendarStatus = 'active' | 'inactive' | 'expired' | 'archived';
+export type PlottingCalendarStatus = 'active' | 'closed' | 'expired' | 'archived';
+export type PlottingCalendarDayStatus = 'open' | 'unavailable' | 'fully_booked';
+export type PlottingCalendarSlotStatus = 'open' | 'unavailable' | 'fully_booked';
 
 export interface PlottingCalendarRow {
   id: string;
@@ -258,6 +260,48 @@ export interface PlottingCalendarRow {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PlottingCalendarDayRow {
+  id: string;
+  plotting_calendar_id: string;
+  date: string;
+  status: PlottingCalendarDayStatus;
+  max_events_for_day: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlottingCalendarTimeSlotRow {
+  id: string;
+  plotting_calendar_day_id: string;
+  starts_at: string;
+  ends_at: string;
+  label: string | null;
+  status: PlottingCalendarSlotStatus;
+  max_events_for_slot: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlottingCalendarAvailabilityDayInput {
+  date: string;
+  status?: PlottingCalendarDayStatus;
+  max_events_for_day?: number | null;
+  notes?: string | null;
+  slots?: Array<{
+    label?: string | null;
+    starts_at: string;
+    ends_at: string;
+    status?: PlottingCalendarSlotStatus;
+    max_events_for_slot?: number | null;
+  }>;
+}
+
+export interface PlottingCalendarAvailabilityInput {
+  days: PlottingCalendarAvailabilityDayInput[];
+  replace_existing?: boolean;
 }
 
 export interface PlottingCalendarCreateInput {

@@ -1,27 +1,19 @@
 # events notes
 
-- Includes four tables in one module: `events`, `event_staff`, `event_participants`, and `event_approvals`.
+- Includes five tables in one module: `plotting_calendars`, `events`, `event_staff`, `event_participants`, and deprecated `event_approvals`.
 - All module tables are tenant-scoped with mandatory `org_id` and RLS constrained by `current_user_org_id()`.
-- `is_public` field on events allows approved events to be publicly viewable in a public calendar:
+- Public visibility requires `status = 'published'`, `setup_status = 'complete'`, and `visibility = 'public'` or `is_public = true`:
   - `is_public = false` (default): Event visible only to members of the organization
   - `is_public = true`: Event visible to anyone (authenticated users, public viewers)
-  - Only org members with `manage_events` or `approve_events` permissions can toggle `is_public` status
-  - RLS policy allows anyone to read public events via `is_public = true` condition
+  - Draft, plotted, needs-details, scheduled-only, and cancelled events stay internal
 - `events.extra_data` is JSONB with strict per-type validation:
   - blood_drive: requires `target_donation`, optional `collected_blood`
   - training: requires `training_type`
   - advocacy: requires `topic`
-- Status workflow is constrained by trigger:
-  - request -> pending/approved/rejected/rescheduled
-  - pending -> approved/rejected/rescheduled
-  - rescheduled -> pending/approved/rejected
-- Approval decisions are tracked append-only in `event_approvals` for audit integrity.
-- Hierarchical approval and geographic filtering strategy:
-  - Keep canonical constraints in DB (org isolation, approver role/permission baseline, immutable approval history).
-  - Enforce detailed hierarchy rules (admin <-> coordinator <-> stakeholder) and geographic match in service layer when writing to `event_approvals` and updating `events.status`.
-  - Store computed routing context in `event_approvals.approval_level` and `geo_scope`.
-- Super admin auto-approve approach:
-  - In app service, when request creator has `role.type = super_admin`, write an `event_approvals` row with `action = auto_approve` and set `events.status = approved` in a single transaction.
+- Status workflow is constrained by trigger around direct creation and setup:
+  - `draft`, `plotted`, and `needs_details` can move to `scheduled`, `published`, or `cancelled`
+  - `scheduled` and `published` can move through operational states like `ongoing`, `completed`, or `cancelled`
+- The old request/approve/reject/reschedule workflow is deprecated. `event_approvals` remains only for legacy compatibility and should not drive active UI or service reads.
 - Future donations integration:
   - `event_participants` supports user and donor identities now.
   - `participant_donor_id` can become a foreign key to future `donors` table.

@@ -163,11 +163,18 @@ async function createEventController(req, res) {
             });
             return;
         }
+        if (validated.data.creation_method === 'plotting_calendar') {
+            sendError(res, 400, {
+                code: 'PLOTTING_CALENDAR_ENDPOINT_REQUIRED',
+                message: 'Use /api/v1/plotting-calendars/:id/plot-event to create plotting-calendar events.',
+            });
+            return;
+        }
         const actor = toActor(user);
         const payload = {
             ...validated.data,
             org_id: validated.data.org_id ?? user.org_id,
-            creation_method: validated.data.creation_method ?? 'manual',
+            creation_method: 'manual',
             extra_data: validated.data.extra_data ?? {},
         };
         const result = await eventService.createEvent(actor, payload);

@@ -47,18 +47,31 @@ Draft, plotted, needs-details, scheduled-only, and cancelled events stay interna
 
 ## Plotting Calendars
 
-`plotting_calendars` define controlled windows where authenticated org users can place events into allowed dates and time slots.
+`plotting_calendars` define controlled calendar windows where authenticated org users can reserve event dates and time slots through an appointment-style month/week calendar.
 
 Each plotting calendar stores:
 
 - title and description
-- allowed dates
-- allowed time slots
 - allowed event types
-- per-date and per-slot capacity limits
+- default per-date and per-slot capacity limits
 - access type and allow-lists
 - optional expiry
 - status
+
+Actual day and slot availability is stored in:
+
+- `plotting_calendar_days`
+  - one row per configured date
+  - status: `open`, `unavailable`, or `fully_booked`
+  - optional per-day capacity override
+- `plotting_calendar_time_slots`
+  - one row per available slot on a configured day
+  - status: `open`, `unavailable`, or `fully_booked`
+  - optional per-slot capacity override
+
+The legacy `allowed_dates` and `allowed_time_slots` fields remain synchronized as summary metadata, but interactive scheduling uses the normalized day and slot rows.
+
+Statuses are `active`, `closed`, `expired`, and `archived`.
 
 In v1, plotting requires authenticated users.
 
@@ -90,6 +103,8 @@ Deprecated review-flow endpoints remain only as `410 Gone` responses:
 - `POST /api/v1/plotting-calendars`
 - `PATCH /api/v1/plotting-calendars/:id`
 - `DELETE /api/v1/plotting-calendars/:id`
+- `GET /api/v1/plotting-calendars/:id/availability?from=&to=`
+- `PUT /api/v1/plotting-calendars/:id/availability`
 - `GET /api/v1/plotting-calendars/:id/available-slots`
 - `POST /api/v1/plotting-calendars/:id/plot-event`
 
@@ -103,7 +118,9 @@ Deprecated review-flow endpoints remain only as `410 Gone` responses:
 - `/dashboard/calendar`
   - internal event calendar with event status colors and source badges
 - `/dashboard/plotting-calendars`
-  - plotting calendar management and slot plotting
+  - FullCalendar month/week availability management
+  - admin day status and slot editing
+  - coworker slot reservation and plotted event creation
 
 ## Permissions
 

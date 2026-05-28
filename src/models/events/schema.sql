@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
     CONSTRAINT plotting_calendars_allowed_dates_is_array CHECK (jsonb_typeof(allowed_dates) = 'array'),
     CONSTRAINT plotting_calendars_allowed_time_slots_is_array CHECK (jsonb_typeof(allowed_time_slots) = 'array'),
     CONSTRAINT plotting_calendars_access_type_check CHECK (access_type IN ('org', 'users', 'organizations', 'share_token')),
-    CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'inactive', 'expired', 'archived')),
+    CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'closed', 'expired', 'archived')),
     CONSTRAINT plotting_calendars_limits_non_negative CHECK (
         (max_events_per_date IS NULL OR max_events_per_date > 0)
         AND (max_events_per_slot IS NULL OR max_events_per_slot > 0)
@@ -65,6 +65,59 @@ CREATE INDEX IF NOT EXISTS plotting_calendars_allowed_event_types_gin_idx
 DROP TRIGGER IF EXISTS trg_plotting_calendars_set_updated_at ON public.plotting_calendars;
 CREATE TRIGGER trg_plotting_calendars_set_updated_at
 BEFORE UPDATE ON public.plotting_calendars
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.plotting_calendar_days (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    plotting_calendar_id UUID NOT NULL REFERENCES public.plotting_calendars(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    max_events_for_day INTEGER,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT plotting_calendar_days_unique_date UNIQUE (plotting_calendar_id, date),
+    CONSTRAINT plotting_calendar_days_status_check CHECK (status IN ('open', 'unavailable', 'fully_booked')),
+    CONSTRAINT plotting_calendar_days_capacity_positive CHECK (max_events_for_day IS NULL OR max_events_for_day > 0)
+);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_days_calendar_date_idx
+    ON public.plotting_calendar_days (plotting_calendar_id, date);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_days_status_idx
+    ON public.plotting_calendar_days (plotting_calendar_id, status, date);
+
+DROP TRIGGER IF EXISTS trg_plotting_calendar_days_set_updated_at ON public.plotting_calendar_days;
+CREATE TRIGGER trg_plotting_calendar_days_set_updated_at
+BEFORE UPDATE ON public.plotting_calendar_days
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.plotting_calendar_time_slots (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    plotting_calendar_day_id UUID NOT NULL REFERENCES public.plotting_calendar_days(id) ON DELETE CASCADE,
+    starts_at TIME NOT NULL,
+    ends_at TIME NOT NULL,
+    label TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    max_events_for_slot INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT plotting_calendar_time_slots_unique_window UNIQUE (plotting_calendar_day_id, starts_at, ends_at),
+    CONSTRAINT plotting_calendar_time_slots_status_check CHECK (status IN ('open', 'unavailable', 'fully_booked')),
+    CONSTRAINT plotting_calendar_time_slots_capacity_positive CHECK (max_events_for_slot IS NULL OR max_events_for_slot > 0),
+    CONSTRAINT plotting_calendar_time_slots_window_check CHECK (ends_at > starts_at)
+);
+
+CREATE INDEX IF NOT EXISTS plotting_calendar_time_slots_day_status_idx
+    ON public.plotting_calendar_time_slots (plotting_calendar_day_id, status, starts_at);
+
+DROP TRIGGER IF EXISTS trg_plotting_calendar_time_slots_set_updated_at ON public.plotting_calendar_time_slots;
+CREATE TRIGGER trg_plotting_calendar_time_slots_set_updated_at
+BEFORE UPDATE ON public.plotting_calendar_time_slots
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 

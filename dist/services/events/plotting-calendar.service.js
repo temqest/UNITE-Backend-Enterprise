@@ -18,14 +18,16 @@ const slotSchema = zod_1.z.object({
         });
     }
 });
-const calendarStatusSchema = zod_1.z.enum(['active', 'inactive', 'expired', 'archived']);
+const calendarStatusSchema = zod_1.z.enum(['active', 'closed', 'expired', 'archived']);
 const accessTypeSchema = zod_1.z.enum(['org', 'users', 'organizations', 'share_token']);
+const dayStatusSchema = zod_1.z.enum(['open', 'unavailable', 'fully_booked']);
+const slotStatusSchema = zod_1.z.enum(['open', 'unavailable', 'fully_booked']);
 const PlottingCalendarCreateSchema = zod_1.z.object({
     org_id: zod_1.z.string().uuid(),
     title: zod_1.z.string().trim().min(3),
     description: zod_1.z.string().trim().optional().nullable(),
-    allowed_dates: zod_1.z.array(zod_1.z.string().date()).min(1),
-    allowed_time_slots: zod_1.z.array(slotSchema).min(1),
+    allowed_dates: zod_1.z.array(zod_1.z.string().date()).optional().default([]),
+    allowed_time_slots: zod_1.z.array(slotSchema).optional().default([]),
     allowed_event_types: zod_1.z.array(zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).min(1),
     max_events_per_date: zod_1.z.number().int().positive().optional().nullable(),
     max_events_per_slot: zod_1.z.number().int().positive().optional().nullable(),
@@ -58,6 +60,36 @@ const PlottingCalendarFilterSchema = zod_1.z.object({
     search: zod_1.z.string().trim().optional(),
     limit: zod_1.z.number().int().min(1).max(200).optional(),
     offset: zod_1.z.number().int().min(0).optional(),
+});
+const AvailabilityRangeSchema = zod_1.z.object({
+    from: zod_1.z.string().date().optional(),
+    to: zod_1.z.string().date().optional(),
+});
+const AvailabilitySlotSchema = zod_1.z.object({
+    label: zod_1.z.string().trim().optional().nullable(),
+    starts_at: timeSchema,
+    ends_at: timeSchema,
+    status: slotStatusSchema.optional(),
+    max_events_for_slot: zod_1.z.number().int().positive().optional().nullable(),
+}).superRefine((value, context) => {
+    if (value.starts_at >= value.ends_at) {
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            path: ['ends_at'],
+            message: 'ends_at must be later than starts_at.',
+        });
+    }
+});
+const AvailabilityDaySchema = zod_1.z.object({
+    date: zod_1.z.string().date(),
+    status: dayStatusSchema.optional(),
+    max_events_for_day: zod_1.z.number().int().positive().optional().nullable(),
+    notes: zod_1.z.string().trim().optional().nullable(),
+    slots: zod_1.z.array(AvailabilitySlotSchema).optional(),
+});
+const AvailabilityUpdateSchema = zod_1.z.object({
+    days: zod_1.z.array(AvailabilityDaySchema).min(1),
+    replace_existing: zod_1.z.boolean().optional(),
 });
 const PlotEventSchema = zod_1.z.object({
     title: zod_1.z.string().trim().min(3),
@@ -111,6 +143,34 @@ function normalizeCalendarRow(row) {
         updated_at: String(row.updated_at),
     };
 }
+function normalizeDayRow(row) {
+    return {
+        id: String(row.id),
+        plotting_calendar_id: String(row.plotting_calendar_id),
+        date: String(row.date),
+        status: String(row.status || 'open'),
+        max_events_for_day: typeof row.max_events_for_day === 'number' ? row.max_events_for_day : null,
+        notes: typeof row.notes === 'string' ? row.notes : null,
+        created_at: String(row.created_at),
+        updated_at: String(row.updated_at),
+    };
+}
+function normalizeTimeSlotRow(row) {
+    return {
+        id: String(row.id),
+        plotting_calendar_day_id: String(row.plotting_calendar_day_id),
+        starts_at: String(row.starts_at),
+        ends_at: String(row.ends_at),
+        label: typeof row.label === 'string' ? row.label : null,
+        status: String(row.status || 'open'),
+        max_events_for_slot: typeof row.max_events_for_slot === 'number' ? row.max_events_for_slot : null,
+        created_at: String(row.created_at),
+        updated_at: String(row.updated_at),
+    };
+}
+function stripSeconds(value) {
+    return String(value ?? '').slice(0, 5);
+}
 class PlottingCalendarService {
     supabase;
     eventService;
@@ -160,14 +220,21 @@ class PlottingCalendarService {
         }
         return { data: normalizeCalendarRow(data), error: null };
     }
-    async getActiveEventsForCalendar(calendar) {
-        const { data, error } = await this.supabase
+    async getActiveEventsForCalendar(calendar, from, to) {
+        let query = this.supabase
             .from('events')
             .select('*')
             .eq('org_id', calendar.org_id)
             .neq('status', 'cancelled')
             .neq('status', 'completed')
-            .or(`plotting_calendar_id.eq.${calendar.id},and(event_date.in.(${calendar.allowed_dates.join(',')}),creation_method.eq.plotting_calendar)`);
+            .eq('plotting_calendar_id', calendar.id);
+        if (from) {
+            query = query.gte('event_date', from);
+        }
+        if (to) {
+            query = query.lte('event_date', to);
+        }
+        const { data, error } = await query;
         if (error) {
             return {
                 data: null,
@@ -175,6 +242,39 @@ class PlottingCalendarService {
             };
         }
         return { data: data ?? [], error: null };
+    }
+    async syncLegacyAvailabilityFields(calendarId) {
+        const { data: dayData } = await this.supabase
+            .from('plotting_calendar_days')
+            .select('id, date')
+            .eq('plotting_calendar_id', calendarId)
+            .order('date', { ascending: true });
+        const days = (dayData ?? []).map(normalizeDayRow);
+        const dayIds = days.map((day) => day.id);
+        let slots = [];
+        if (dayIds.length) {
+            const { data: slotData } = await this.supabase
+                .from('plotting_calendar_time_slots')
+                .select('*')
+                .in('plotting_calendar_day_id', dayIds)
+                .order('starts_at', { ascending: true });
+            slots = (slotData ?? []).map(normalizeTimeSlotRow);
+        }
+        const uniqueSlots = Array.from(new Map(slots.map((slot) => [
+            `${stripSeconds(slot.starts_at)}|${stripSeconds(slot.ends_at)}`,
+            {
+                label: slot.label ?? undefined,
+                start_time: stripSeconds(slot.starts_at),
+                end_time: stripSeconds(slot.ends_at),
+            },
+        ])).values());
+        await this.supabase
+            .from('plotting_calendars')
+            .update({
+            allowed_dates: days.map((day) => day.date).sort(),
+            allowed_time_slots: uniqueSlots,
+        })
+            .eq('id', calendarId);
     }
     async listCalendars(actor, filter = {}) {
         try {
@@ -258,7 +358,25 @@ class PlottingCalendarService {
                     error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_CREATE_FAILED', 'Failed to create plotting calendar.', error),
                 };
             }
-            return { data: normalizeCalendarRow(data), error: null };
+            const calendar = normalizeCalendarRow(data);
+            if (calendar.allowed_dates.length) {
+                await this.upsertAvailability(actor, calendar.id, {
+                    days: calendar.allowed_dates.map((date) => ({
+                        date,
+                        status: 'open',
+                        max_events_for_day: calendar.max_events_per_date,
+                        slots: calendar.allowed_time_slots.map((slot) => ({
+                            label: slot.label ?? null,
+                            starts_at: slot.start_time,
+                            ends_at: slot.end_time,
+                            status: 'open',
+                            max_events_for_slot: calendar.max_events_per_slot,
+                        })),
+                    })),
+                    replace_existing: true,
+                });
+            }
+            return { data: calendar, error: null };
         }
         catch (error) {
             return {
@@ -293,7 +411,25 @@ class PlottingCalendarService {
                     error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_UPDATE_FAILED', 'Failed to update plotting calendar.', error),
                 };
             }
-            return { data: normalizeCalendarRow(data), error: null };
+            const calendar = normalizeCalendarRow(data);
+            if (calendar.allowed_dates.length && (parsed.allowed_dates || parsed.allowed_time_slots || parsed.max_events_per_date !== undefined || parsed.max_events_per_slot !== undefined)) {
+                await this.upsertAvailability(actor, calendar.id, {
+                    days: calendar.allowed_dates.map((date) => ({
+                        date,
+                        status: 'open',
+                        max_events_for_day: calendar.max_events_per_date,
+                        slots: calendar.allowed_time_slots.map((slot) => ({
+                            label: slot.label ?? null,
+                            starts_at: slot.start_time,
+                            ends_at: slot.end_time,
+                            status: 'open',
+                            max_events_for_slot: calendar.max_events_per_slot,
+                        })),
+                    })),
+                    replace_existing: true,
+                });
+            }
+            return { data: calendar, error: null };
         }
         catch (error) {
             return {
@@ -326,35 +462,215 @@ class PlottingCalendarService {
         }
         return { data: true, error: null };
     }
-    async getAvailableSlots(actor, calendarId) {
-        const calendarResult = await this.getCalendar(actor, calendarId);
-        if (calendarResult.error || !calendarResult.data) {
-            return { data: null, error: calendarResult.error };
-        }
-        const calendar = calendarResult.data;
-        const eventResult = await this.getActiveEventsForCalendar(calendar);
-        if (eventResult.error || !eventResult.data) {
-            return { data: null, error: eventResult.error };
-        }
-        const items = [];
-        for (const eventDate of calendar.allowed_dates) {
-            const sameDayEvents = eventResult.data.filter((event) => event.event_date === eventDate);
-            for (const slot of calendar.allowed_time_slots) {
-                const currentEvents = sameDayEvents.filter((event) => event.start_time === slot.start_time && event.end_time === slot.end_time).length;
-                const remainingSlotCapacity = calendar.max_events_per_slot != null ? Math.max(calendar.max_events_per_slot - currentEvents, 0) : null;
-                const remainingDateCapacity = calendar.max_events_per_date != null ? Math.max(calendar.max_events_per_date - sameDayEvents.length, 0) : null;
-                items.push({
-                    event_date: eventDate,
-                    slot,
-                    current_events: currentEvents,
-                    date_events: sameDayEvents.length,
-                    remaining_slot_capacity: remainingSlotCapacity,
-                    remaining_date_capacity: remainingDateCapacity,
-                    available: (remainingSlotCapacity == null || remainingSlotCapacity > 0) &&
-                        (remainingDateCapacity == null || remainingDateCapacity > 0),
-                });
+    async getAvailability(actor, calendarId, range = {}) {
+        try {
+            const parsedRange = AvailabilityRangeSchema.parse(range);
+            const calendarResult = await this.getCalendar(actor, calendarId);
+            if (calendarResult.error || !calendarResult.data) {
+                return { data: null, error: calendarResult.error };
             }
+            let dayQuery = this.supabase
+                .from('plotting_calendar_days')
+                .select('*')
+                .eq('plotting_calendar_id', calendarId)
+                .order('date', { ascending: true });
+            if (parsedRange.from) {
+                dayQuery = dayQuery.gte('date', parsedRange.from);
+            }
+            if (parsedRange.to) {
+                dayQuery = dayQuery.lte('date', parsedRange.to);
+            }
+            const { data: dayData, error: dayError } = await dayQuery;
+            if (dayError) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_LOOKUP_FAILED', 'Failed to load plotting calendar availability.', dayError),
+                };
+            }
+            const days = (dayData ?? []).map(normalizeDayRow);
+            const dayIds = days.map((day) => day.id);
+            let slots = [];
+            if (dayIds.length) {
+                const { data: slotData, error: slotError } = await this.supabase
+                    .from('plotting_calendar_time_slots')
+                    .select('*')
+                    .in('plotting_calendar_day_id', dayIds)
+                    .order('starts_at', { ascending: true });
+                if (slotError) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_LOOKUP_FAILED', 'Failed to load plotting calendar time slots.', slotError),
+                    };
+                }
+                slots = (slotData ?? []).map(normalizeTimeSlotRow);
+            }
+            const eventResult = await this.getActiveEventsForCalendar(calendarResult.data, parsedRange.from, parsedRange.to);
+            if (eventResult.error || !eventResult.data) {
+                return { data: null, error: eventResult.error };
+            }
+            const slotsByDay = new Map();
+            for (const slot of slots) {
+                const current = slotsByDay.get(slot.plotting_calendar_day_id) ?? [];
+                current.push(slot);
+                slotsByDay.set(slot.plotting_calendar_day_id, current);
+            }
+            const response = days.map((day) => {
+                const sameDayEvents = eventResult.data.filter((event) => event.event_date === day.date);
+                const dayCapacity = day.max_events_for_day ?? calendarResult.data.max_events_per_date;
+                const remainingDayCapacity = dayCapacity != null ? Math.max(dayCapacity - sameDayEvents.length, 0) : null;
+                const dayOpen = day.status === 'open' && (remainingDayCapacity == null || remainingDayCapacity > 0);
+                const enrichedSlots = (slotsByDay.get(day.id) ?? []).map((slot) => {
+                    const currentEvents = sameDayEvents.filter((event) => stripSeconds(event.start_time) === stripSeconds(slot.starts_at) && stripSeconds(event.end_time) === stripSeconds(slot.ends_at)).length;
+                    const slotCapacity = slot.max_events_for_slot ?? calendarResult.data.max_events_per_slot;
+                    const remainingSlotCapacity = slotCapacity != null ? Math.max(slotCapacity - currentEvents, 0) : null;
+                    const slotOpen = dayOpen && slot.status === 'open' && (remainingSlotCapacity == null || remainingSlotCapacity > 0);
+                    return {
+                        ...slot,
+                        starts_at: stripSeconds(slot.starts_at),
+                        ends_at: stripSeconds(slot.ends_at),
+                        current_events: currentEvents,
+                        remaining_slot_capacity: remainingSlotCapacity,
+                        available: slotOpen,
+                    };
+                });
+                return {
+                    ...day,
+                    date_events: sameDayEvents.length,
+                    remaining_day_capacity: remainingDayCapacity,
+                    available: dayOpen && enrichedSlots.some((slot) => slot.available),
+                    slots: enrichedSlots,
+                };
+            });
+            return { data: response, error: null };
         }
+        catch (error) {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_FILTER_INVALID', 'Invalid availability query.', error),
+            };
+        }
+    }
+    async upsertAvailability(actor, calendarId, input) {
+        try {
+            if (!this.canManage(actor)) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'You do not have permission to manage plotting calendar availability.'),
+                };
+            }
+            const calendarResult = await this.getCalendar(actor, calendarId);
+            if (calendarResult.error || !calendarResult.data) {
+                return { data: null, error: calendarResult.error };
+            }
+            const parsed = AvailabilityUpdateSchema.parse(input);
+            const dates = parsed.days.map((day) => day.date);
+            if (parsed.replace_existing) {
+                let deleteQuery = this.supabase
+                    .from('plotting_calendar_days')
+                    .delete()
+                    .eq('plotting_calendar_id', calendarId);
+                if (dates.length) {
+                    deleteQuery = deleteQuery.in('date', dates);
+                }
+                const { error: deleteError } = await deleteQuery;
+                if (deleteError) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_SAVE_FAILED', 'Failed to replace plotting calendar days.', deleteError),
+                    };
+                }
+            }
+            const dayRows = parsed.days.map((day) => ({
+                plotting_calendar_id: calendarId,
+                date: day.date,
+                status: day.status ?? 'open',
+                max_events_for_day: day.max_events_for_day ?? calendarResult.data.max_events_per_date,
+                notes: day.notes ?? null,
+            }));
+            const { data: savedDayData, error: dayError } = await this.supabase
+                .from('plotting_calendar_days')
+                .upsert(dayRows, { onConflict: 'plotting_calendar_id,date' })
+                .select('*');
+            if (dayError || !savedDayData) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_SAVE_FAILED', 'Failed to save plotting calendar days.', dayError),
+                };
+            }
+            const savedDays = savedDayData.map(normalizeDayRow);
+            const savedDayIds = savedDays.map((day) => day.id);
+            if (savedDayIds.length) {
+                const { error: slotDeleteError } = await this.supabase
+                    .from('plotting_calendar_time_slots')
+                    .delete()
+                    .in('plotting_calendar_day_id', savedDayIds);
+                if (slotDeleteError) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_SAVE_FAILED', 'Failed to replace plotting calendar time slots.', slotDeleteError),
+                    };
+                }
+            }
+            const dayIdByDate = new Map(savedDays.map((day) => [day.date, day.id]));
+            const slotRows = parsed.days.flatMap((day) => {
+                const dayId = dayIdByDate.get(day.date);
+                if (!dayId)
+                    return [];
+                return (day.slots ?? []).map((slot) => ({
+                    plotting_calendar_day_id: dayId,
+                    starts_at: slot.starts_at,
+                    ends_at: slot.ends_at,
+                    label: slot.label?.trim() || null,
+                    status: slot.status ?? 'open',
+                    max_events_for_slot: slot.max_events_for_slot ?? calendarResult.data.max_events_per_slot,
+                }));
+            });
+            if (slotRows.length) {
+                const { error: slotError } = await this.supabase
+                    .from('plotting_calendar_time_slots')
+                    .insert(slotRows);
+                if (slotError) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_SAVE_FAILED', 'Failed to save plotting calendar time slots.', slotError),
+                    };
+                }
+            }
+            await this.syncLegacyAvailabilityFields(calendarId);
+            return this.getAvailability(actor, calendarId, {
+                from: dates.sort()[0],
+                to: dates.sort()[dates.length - 1],
+            });
+        }
+        catch (error) {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PLOTTING_AVAILABILITY_VALIDATION_ERROR', 'Invalid plotting calendar availability payload.', error),
+            };
+        }
+    }
+    async getAvailableSlots(actor, calendarId) {
+        const availabilityResult = await this.getAvailability(actor, calendarId);
+        if (availabilityResult.error || !availabilityResult.data) {
+            return { data: null, error: availabilityResult.error };
+        }
+        const items = availabilityResult.data.flatMap((day) => day.slots.map((slot) => ({
+            day_id: day.id,
+            slot_id: slot.id,
+            event_date: day.date,
+            day_status: day.status,
+            slot_status: slot.status,
+            slot: {
+                label: slot.label ?? undefined,
+                start_time: slot.starts_at,
+                end_time: slot.ends_at,
+            },
+            current_events: slot.current_events,
+            date_events: day.date_events,
+            remaining_slot_capacity: slot.remaining_slot_capacity,
+            remaining_date_capacity: day.remaining_day_capacity,
+            available: slot.available,
+        })));
         return { data: items, error: null };
     }
     async plotEvent(actor, calendarId, input) {
@@ -383,32 +699,33 @@ class PlottingCalendarService {
                 };
             }
             const parsed = PlotEventSchema.parse(input);
-            if (!calendar.allowed_dates.includes(parsed.event_date)) {
-                return {
-                    data: null,
-                    error: (0, event_types_1.toServiceError)('PLOTTING_DATE_NOT_ALLOWED', 'Selected date is not available on this plotting calendar.'),
-                };
-            }
             if (!calendar.allowed_event_types.includes(parsed.type)) {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('PLOTTING_TYPE_NOT_ALLOWED', 'Selected event type is not available on this plotting calendar.'),
                 };
             }
-            const matchingSlot = calendar.allowed_time_slots.find((slot) => slot.start_time === parsed.start_time && slot.end_time === parsed.end_time);
-            if (!matchingSlot) {
+            const availabilityResult = await this.getAvailability(actor, calendarId, {
+                from: parsed.event_date,
+                to: parsed.event_date,
+            });
+            if (availabilityResult.error || !availabilityResult.data) {
+                return { data: null, error: availabilityResult.error };
+            }
+            const targetDay = availabilityResult.data.find((day) => day.date === parsed.event_date);
+            if (!targetDay || targetDay.status !== 'open') {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_DATE_NOT_ALLOWED', 'Selected date is not available on this plotting calendar.'),
+                };
+            }
+            const targetAvailability = targetDay.slots.find((slot) => stripSeconds(slot.starts_at) === stripSeconds(parsed.start_time) && stripSeconds(slot.ends_at) === stripSeconds(parsed.end_time));
+            if (!targetAvailability) {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('PLOTTING_SLOT_NOT_ALLOWED', 'Selected time slot is not available on this plotting calendar.'),
                 };
             }
-            const availabilityResult = await this.getAvailableSlots(actor, calendarId);
-            if (availabilityResult.error || !availabilityResult.data) {
-                return { data: null, error: availabilityResult.error };
-            }
-            const targetAvailability = availabilityResult.data.find((item) => item.event_date === parsed.event_date &&
-                item.slot.start_time === parsed.start_time &&
-                item.slot.end_time === parsed.end_time);
             if (!targetAvailability?.available) {
                 return {
                     data: null,

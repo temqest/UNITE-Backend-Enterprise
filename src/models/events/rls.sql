@@ -84,6 +84,8 @@ AS $$
 $$;
 
 ALTER TABLE public.plotting_calendars ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plotting_calendar_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plotting_calendar_time_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_participants ENABLE ROW LEVEL SECURITY;
@@ -165,6 +167,129 @@ USING (
     )
 );
 
+DROP POLICY IF EXISTS plotting_calendar_days_select_accessible ON public.plotting_calendar_days;
+CREATE POLICY plotting_calendar_days_select_accessible
+ON public.plotting_calendar_days
+FOR SELECT
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendars calendar
+        WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_has_any_permission(ARRAY['events.read', 'view_events'])
+              OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+          )
+          AND (
+              calendar.access_type = 'org'
+              OR public.current_user_profile_id() = ANY(calendar.allowed_user_ids)
+              OR public.current_user_org_id() = ANY(calendar.allowed_organization_ids)
+              OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+          )
+    )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_days_manage ON public.plotting_calendar_days;
+CREATE POLICY plotting_calendar_days_manage
+ON public.plotting_calendar_days
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendars calendar
+        WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+              OR (
+                  public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+                  AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+              )
+          )
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendars calendar
+        WHERE calendar.id = plotting_calendar_days.plotting_calendar_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+              OR (
+                  public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+                  AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+              )
+          )
+    )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_time_slots_select_accessible ON public.plotting_calendar_time_slots;
+CREATE POLICY plotting_calendar_time_slots_select_accessible
+ON public.plotting_calendar_time_slots
+FOR SELECT
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendar_days day
+        JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+        WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_has_any_permission(ARRAY['events.read', 'view_events'])
+              OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+          )
+          AND (
+              calendar.access_type = 'org'
+              OR public.current_user_profile_id() = ANY(calendar.allowed_user_ids)
+              OR public.current_user_org_id() = ANY(calendar.allowed_organization_ids)
+              OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+          )
+    )
+);
+
+DROP POLICY IF EXISTS plotting_calendar_time_slots_manage ON public.plotting_calendar_time_slots;
+CREATE POLICY plotting_calendar_time_slots_manage
+ON public.plotting_calendar_time_slots
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendar_days day
+        JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+        WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+              OR (
+                  public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+                  AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+              )
+          )
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.plotting_calendar_days day
+        JOIN public.plotting_calendars calendar ON calendar.id = day.plotting_calendar_id
+        WHERE day.id = plotting_calendar_time_slots.plotting_calendar_day_id
+          AND calendar.org_id = public.current_user_org_id()
+          AND (
+              public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
+              OR (
+                  public.current_user_has_any_permission(ARRAY['events.create', 'create_events'])
+                  AND public.current_user_has_any_permission(ARRAY['events.update', 'manage_events', 'edit_events'])
+              )
+          )
+    )
+);
+
 -- EVENTS ---------------------------------------------------------------------
 
 DROP POLICY IF EXISTS events_select_same_org ON public.events;
@@ -173,7 +298,7 @@ ON public.events
 FOR SELECT
 USING (
     org_id = public.current_user_org_id()
-    OR (status = 'published' AND (visibility = 'public' OR is_public = true))
+    OR (status = 'published' AND setup_status = 'complete' AND (visibility = 'public' OR is_public = true))
 );
 
 DROP POLICY IF EXISTS events_insert_same_org_creators ON public.events;
