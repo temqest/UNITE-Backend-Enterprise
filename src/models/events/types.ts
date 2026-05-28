@@ -236,6 +236,7 @@ export type PlottingCalendarAccessType = 'org' | 'users' | 'organizations' | 'sh
 export type PlottingCalendarStatus = 'active' | 'closed' | 'expired' | 'archived';
 export type PlottingCalendarDayStatus = 'open' | 'unavailable' | 'fully_booked';
 export type PlottingCalendarSlotStatus = 'open' | 'unavailable' | 'fully_booked';
+export type PlottingCalendarAvailabilityMode = 'flexible' | 'slots';
 
 export interface PlottingCalendarRow {
   id: string;
@@ -267,6 +268,9 @@ export interface PlottingCalendarDayRow {
   plotting_calendar_id: string;
   date: string;
   status: PlottingCalendarDayStatus;
+  availability_mode: PlottingCalendarAvailabilityMode;
+  flexible_starts_at: string | null;
+  flexible_ends_at: string | null;
   max_events_for_day: number | null;
   notes: string | null;
   created_at: string;
@@ -288,6 +292,9 @@ export interface PlottingCalendarTimeSlotRow {
 export interface PlottingCalendarAvailabilityDayInput {
   date: string;
   status?: PlottingCalendarDayStatus;
+  availability_mode?: PlottingCalendarAvailabilityMode;
+  flexible_starts_at?: string | null;
+  flexible_ends_at?: string | null;
   max_events_for_day?: number | null;
   notes?: string | null;
   slots?: Array<{

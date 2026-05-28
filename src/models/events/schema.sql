@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendar_days (
     plotting_calendar_id UUID NOT NULL REFERENCES public.plotting_calendars(id) ON DELETE CASCADE,
     date DATE NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
+    availability_mode TEXT NOT NULL DEFAULT 'slots',
+    flexible_starts_at TIME,
+    flexible_ends_at TIME,
     max_events_for_day INTEGER,
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -80,6 +83,12 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendar_days (
 
     CONSTRAINT plotting_calendar_days_unique_date UNIQUE (plotting_calendar_id, date),
     CONSTRAINT plotting_calendar_days_status_check CHECK (status IN ('open', 'unavailable', 'fully_booked')),
+    CONSTRAINT plotting_calendar_days_mode_check CHECK (availability_mode IN ('flexible', 'slots')),
+    CONSTRAINT plotting_calendar_days_flexible_window_check CHECK (
+        flexible_starts_at IS NULL
+        OR flexible_ends_at IS NULL
+        OR flexible_ends_at > flexible_starts_at
+    ),
     CONSTRAINT plotting_calendar_days_capacity_positive CHECK (max_events_for_day IS NULL OR max_events_for_day > 0)
 );
 
