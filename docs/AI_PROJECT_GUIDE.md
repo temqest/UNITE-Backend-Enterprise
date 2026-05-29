@@ -164,7 +164,7 @@ UNITE-Backend-Enterprise/
 |------|------|
 | Page | `app/dashboard/campaign/page.tsx` |
 | Components | `components/campaign/CampaignHeader.tsx`, `CampaignFilters.tsx`, `EventCard.tsx`, `EventCardActions.tsx`, `CampaignCalendar.tsx` |
-| Modals | `components/campaign/modals/ManualEventCreateModal.tsx`, `CompleteEventDetailsModal.tsx`, `EventDetailModal.tsx` |
+| Modals | `components/campaign/modals/ManualEventCreateModal.tsx` (viewport-capped shell, scrollable body, sticky actions), `CompleteEventDetailsModal.tsx`, `ConfirmEventActionModal.tsx`, `EventDetailModal.tsx` (viewport-capped shell, scrollable body, sticky actions) |
 | Types | `components/campaign/types.ts` |
 | API | `manualCreateEvent`, `completeEventDetails`, `publishEvent`, `cancelEvent`, `updateEventStatus`, `listEvents`, etc. (`lib/api.ts`) |
 | Backend | `POST /api/v1/events/manual`, `PATCH .../complete-details`, `PATCH .../publish`, `GET /api/v1/events` |

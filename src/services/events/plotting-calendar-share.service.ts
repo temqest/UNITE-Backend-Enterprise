@@ -157,6 +157,7 @@ export class PlottingCalendarShareService {
       const extra_data = {
         plotted_from_calendar: true,
         plotting_calendar_title: calendarResult.data.title,
+        target_donation: parsed.target_donations,
         public_reservation: {
           reserved_by_name: parsed.visitor_name,
           reserved_by_address: parsed.visitor_address,
@@ -178,7 +179,7 @@ export class PlottingCalendarShareService {
         event_date: parsed.event_date,
         start_time: parsed.start_time,
         end_time: parsed.end_time,
-        address: parsed.address || null,
+        address: parsed.visitor_address || parsed.address || null,
         description: parsed.description || null,
         hosting_organization: parsed.organization_name || parsed.visitor_name,
         extra_data,
