@@ -346,13 +346,13 @@ Deprecated approve/reject/reschedule may return `410 Gone` — see [campaign-eve
 | GET | `/plotting-calendars/:id/availability?from=&to=` | `events.read` |
 | PUT | `/plotting-calendars/:id/availability` | `events.update` |
 | GET | `/plotting-calendars/:id/available-slots` | `events.read` |
-| POST | `/plotting-calendars/:id/plot-event` | `events.create` |
+| POST | `/plotting-calendars/share/:token/plot-event` | **Public** (via Share Token) |
 
 **Plot-event behavior:** Creates `events` row with `status: plotted`, `setup_status: needs_details`, `creation_method: plotting_calendar`, `visibility: internal`, `is_public: false`. No separate `reservations` table.
 
 **Access checks:** `hasCalendarAccess()` in `plotting-calendar.service.ts` — same org, `events.read` or staff role; managers bypass list restrictions; otherwise `access_type` + allow-lists.
 
-**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. **No unauthenticated public plotting route** in current routes file.
+**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. Unauthenticated public plotting routes are available under `/api/v1/plotting-calendars/share/*`.
 
 ### Auth module
 
@@ -611,7 +611,7 @@ Never commit real secrets. Do not document actual values here.
 - [ ] Frontend `.env.example` in prototype
 - [ ] Align `lib/api.ts` default API URL with backend port `6900`
 - [ ] Analytics / reporting endpoints (not found in v1 routes)
-- [ ] Unauthenticated share-link plotting route (if product requires link-only access without login)
+- [x] Unauthenticated share-link plotting route (if product requires link-only access without login)
 - [ ] Track frontend in git or document deployment as separate repo (currently gitignored)
 
 ---

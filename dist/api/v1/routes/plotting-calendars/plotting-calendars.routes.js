@@ -6,8 +6,11 @@ const plotting_calendar_controller_1 = require("../../controllers/events/plottin
 const auth_middleware_1 = require("../../../../middelware/auth.middleware");
 const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
 const async_handler_1 = require("../../../../lib/async-handler");
+const plotting_calendars_share_routes_1 = require("./plotting-calendars-share.routes");
 const plottingCalendarsRouter = (0, express_1.Router)();
 exports.plottingCalendarsRouter = plottingCalendarsRouter;
+// Mount public share routes
+plottingCalendarsRouter.use('/share', plotting_calendars_share_routes_1.plottingCalendarsShareRouter);
 plottingCalendarsRouter.get('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.listPlottingCalendarsController));
 plottingCalendarsRouter.get('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.getPlottingCalendarController));
 plottingCalendarsRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.createPlottingCalendarController));

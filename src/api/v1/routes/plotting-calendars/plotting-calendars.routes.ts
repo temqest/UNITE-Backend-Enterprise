@@ -13,8 +13,12 @@ import {
 import { authMiddleware } from '../../../../middelware/auth.middleware';
 import { authorize, requireActiveUser, requireOrgScope } from '../../../../middelware/authorization.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
+import { plottingCalendarsShareRouter } from './plotting-calendars-share.routes';
 
 const plottingCalendarsRouter = Router();
+
+// Mount public share routes
+plottingCalendarsRouter.use('/share', plottingCalendarsShareRouter);
 
 plottingCalendarsRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(listPlottingCalendarsController as any));
 plottingCalendarsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(getPlottingCalendarController as any));
