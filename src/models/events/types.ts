@@ -232,7 +232,7 @@ export interface EventApprovalCreateInput {
   notes?: string | null;
 }
 
-export type PlottingCalendarAccessType = 'org' | 'users' | 'organizations' | 'share_token';
+export type PlottingCalendarAccessType = 'org' | 'users' | 'organizations' | 'share_token' | 'organization_link';
 export type PlottingCalendarStatus = 'active' | 'closed' | 'expired' | 'archived';
 export type PlottingCalendarDayStatus = 'open' | 'unavailable' | 'fully_booked';
 export type PlottingCalendarSlotStatus = 'open' | 'unavailable' | 'fully_booked';

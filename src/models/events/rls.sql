@@ -105,7 +105,7 @@ USING (
         OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')
     )
     AND (
-        access_type = 'org'
+        access_type IN ('org', 'organization_link')
         OR public.current_user_profile_id() = ANY(allowed_user_ids)
         OR public.current_user_org_id() = ANY(allowed_organization_ids)
         OR public.current_user_role_type() IN ('coordinator', 'admin', 'super_admin')

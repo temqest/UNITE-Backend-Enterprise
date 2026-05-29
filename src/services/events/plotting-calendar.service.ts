@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
@@ -34,7 +35,7 @@ const slotSchema = z.object({
 });
 
 const calendarStatusSchema = z.enum(['active', 'closed', 'expired', 'archived']);
-const accessTypeSchema = z.enum(['org', 'users', 'organizations', 'share_token']);
+const accessTypeSchema = z.enum(['org', 'users', 'organizations', 'share_token', 'organization_link']);
 const dayStatusSchema = z.enum(['open', 'unavailable', 'fully_booked']);
 const slotStatusSchema = z.enum(['open', 'unavailable', 'fully_booked']);
 const availabilityModeSchema = z.enum(['flexible', 'slots']);
@@ -281,6 +282,29 @@ function stripSeconds(value: string | null | undefined): string {
   return String(value ?? '').slice(0, 5);
 }
 
+function resolveShareToken(accessType: PlottingCalendarRow['access_type'], existingShareToken?: string | null): string | null | undefined {
+  if (accessType === 'share_token' || accessType === 'organization_link') {
+    return existingShareToken ?? randomUUID();
+  }
+
+  return existingShareToken;
+}
+
+function isPlottingCalendarAccessTypeConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as Record<string, unknown>;
+  const code = candidate.code;
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+  const details = typeof candidate.details === 'string' ? candidate.details : '';
+  const hint = typeof candidate.hint === 'string' ? candidate.hint : '';
+  const combined = `${String(code ?? '')} ${message} ${details} ${hint}`;
+
+  return combined.includes('23514') && combined.includes('plotting_calendars_access_type_check');
+}
+
 export class PlottingCalendarService {
   private readonly eventService: EventService;
 
@@ -308,7 +332,7 @@ export class PlottingCalendarService {
       return true;
     }
 
-    if (calendar.access_type === 'org' || calendar.access_type === 'share_token') {
+    if (calendar.access_type === 'org' || calendar.access_type === 'share_token' || calendar.access_type === 'organization_link') {
       return true;
     }
 
@@ -496,18 +520,26 @@ export class PlottingCalendarService {
         .insert({
           ...parsed,
           created_by: parsed.created_by ?? actor.id,
-          access_type: parsed.access_type ?? 'org',
+          access_type: parsed.access_type ?? 'organization_link',
           status: parsed.status ?? 'active',
           allowed_user_ids: parsed.allowed_user_ids ?? [],
           allowed_organization_ids: parsed.allowed_organization_ids ?? [],
+          share_token: resolveShareToken(parsed.access_type ?? 'organization_link', parsed.share_token),
         })
         .select('*')
         .single();
 
       if (error || !data) {
+        const accessTypeConstraintError = isPlottingCalendarAccessTypeConstraintError(error);
         return {
           data: null,
-          error: toServiceError('PLOTTING_CALENDAR_CREATE_FAILED', 'Failed to create plotting calendar.', error),
+          error: toServiceError(
+            accessTypeConstraintError ? 'PLOTTING_CALENDAR_ACCESS_TYPE_CONSTRAINT_VIOLATION' : 'PLOTTING_CALENDAR_CREATE_FAILED',
+            accessTypeConstraintError
+              ? 'Invalid plotting calendar access type. Check database constraint and allowed access modes.'
+              : 'Failed to create plotting calendar.',
+            error
+          ),
         };
       }
 
@@ -558,18 +590,32 @@ export class PlottingCalendarService {
       }
 
       const parsed = PlottingCalendarUpdateSchema.parse(input);
+      const updatePayload: Record<string, unknown> = { ...parsed };
+      if (parsed.access_type === 'share_token' || parsed.access_type === 'organization_link') {
+        updatePayload.share_token = resolveShareToken(parsed.access_type, parsed.share_token) ?? existingResult.data.share_token;
+      } else if (parsed.share_token !== undefined) {
+        updatePayload.share_token = parsed.share_token;
+      }
+
       const { data, error } = await this.supabase
         .from('plotting_calendars')
-        .update(parsed)
+        .update(updatePayload)
         .eq('id', calendarId)
         .eq('org_id', actor.org_id)
         .select('*')
         .single();
 
       if (error || !data) {
+        const accessTypeConstraintError = isPlottingCalendarAccessTypeConstraintError(error);
         return {
           data: null,
-          error: toServiceError('PLOTTING_CALENDAR_UPDATE_FAILED', 'Failed to update plotting calendar.', error),
+          error: toServiceError(
+            accessTypeConstraintError ? 'PLOTTING_CALENDAR_ACCESS_TYPE_CONSTRAINT_VIOLATION' : 'PLOTTING_CALENDAR_UPDATE_FAILED',
+            accessTypeConstraintError
+              ? 'Invalid plotting calendar access type. Check database constraint and allowed access modes.'
+              : 'Failed to update plotting calendar.',
+            error
+          ),
         };
       }
 

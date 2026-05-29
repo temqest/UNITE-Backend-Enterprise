@@ -42,6 +42,25 @@ function sendError(res: Response, statusCode: number, code: string, message: str
   });
 }
 
+function isPlottingCalendarAccessTypeConstraintViolation(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === 'PLOTTING_CALENDAR_ACCESS_TYPE_CONSTRAINT_VIOLATION';
+}
+
+function logPlottingCalendarConstraintViolation(action: 'create' | 'update', error: unknown): void {
+  if (process.env.NODE_ENV === 'production') {
+    return;
+  }
+
+  const candidate = error as { code?: string; message?: string; details?: { code?: string; message?: string } } | null | undefined;
+  console.warn('[plotting-calendars] access type constraint violation', {
+    action,
+    code: candidate?.code,
+    message: candidate?.message,
+    dbCode: candidate?.details?.code,
+    dbMessage: candidate?.details?.message,
+  });
+}
+
 function toActor(user: AuthenticatedUser): EventActorContext {
   return {
     id: user.id,
@@ -137,7 +156,19 @@ export async function createPlottingCalendarController(req: Request, res: Respon
 
     const result = await plottingCalendarService.createCalendar(toActor(user), payload);
     if (result.error || !result.data) {
-      sendError(res, 400, result.error?.code ?? 'PLOTTING_CALENDAR_CREATE_FAILED', result.error?.message ?? 'Failed to create plotting calendar.', result.error?.details);
+      if (isPlottingCalendarAccessTypeConstraintViolation(result.error)) {
+        logPlottingCalendarConstraintViolation('create', result.error);
+      }
+
+      sendError(
+        res,
+        400,
+        result.error?.code ?? 'PLOTTING_CALENDAR_CREATE_FAILED',
+        isPlottingCalendarAccessTypeConstraintViolation(result.error)
+          ? 'Failed to create plotting calendar.'
+          : result.error?.message ?? 'Failed to create plotting calendar.',
+        result.error?.details
+      );
       return;
     }
 
@@ -160,7 +191,19 @@ export async function updatePlottingCalendarController(req: Request, res: Respon
 
     const result = await plottingCalendarService.updateCalendar(toActor(user), calendarId, (req.body ?? {}) as PlottingCalendarUpdateInput);
     if (result.error || !result.data) {
-      sendError(res, 400, result.error?.code ?? 'PLOTTING_CALENDAR_UPDATE_FAILED', result.error?.message ?? 'Failed to update plotting calendar.', result.error?.details);
+      if (isPlottingCalendarAccessTypeConstraintViolation(result.error)) {
+        logPlottingCalendarConstraintViolation('update', result.error);
+      }
+
+      sendError(
+        res,
+        400,
+        result.error?.code ?? 'PLOTTING_CALENDAR_UPDATE_FAILED',
+        isPlottingCalendarAccessTypeConstraintViolation(result.error)
+          ? 'Failed to update plotting calendar.'
+          : result.error?.message ?? 'Failed to update plotting calendar.',
+        result.error?.details
+      );
       return;
     }
 

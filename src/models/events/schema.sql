@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
     allowed_event_types TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     max_events_per_date INTEGER,
     max_events_per_slot INTEGER,
-    access_type TEXT NOT NULL DEFAULT 'org',
+    access_type TEXT NOT NULL DEFAULT 'organization_link',
     allowed_user_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     allowed_organization_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     share_token TEXT,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
     CONSTRAINT plotting_calendars_title_min_length CHECK (char_length(trim(title)) >= 3),
     CONSTRAINT plotting_calendars_allowed_dates_is_array CHECK (jsonb_typeof(allowed_dates) = 'array'),
     CONSTRAINT plotting_calendars_allowed_time_slots_is_array CHECK (jsonb_typeof(allowed_time_slots) = 'array'),
-    CONSTRAINT plotting_calendars_access_type_check CHECK (access_type IN ('org', 'users', 'organizations', 'share_token')),
+    CONSTRAINT plotting_calendars_access_type_check CHECK (access_type IN ('org', 'users', 'organizations', 'share_token', 'organization_link')),
     CONSTRAINT plotting_calendars_status_check CHECK (status IN ('active', 'closed', 'expired', 'archived')),
     CONSTRAINT plotting_calendars_limits_non_negative CHECK (
         (max_events_per_date IS NULL OR max_events_per_date > 0)
