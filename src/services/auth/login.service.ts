@@ -3,7 +3,6 @@
  * Handles email/password and magic link authentication
  */
 
-import { createClient } from '@supabase/supabase-js';
 import {
   LoginInput,
   MagicLinkInput,
@@ -16,10 +15,7 @@ import {
   GeographicArea,
 } from './auth.types';
 import { resolveCanonicalRole } from './rbac.constants';
-
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from '../../lib/supabase/supabase.client';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -90,9 +86,9 @@ async function resolveOrLinkUserProfile(authUserId: string, email?: string | nul
     } as AuthError;
   }
 
-  const linked = rows[0];
-  const { data: updatedProfile, error: updateError } = await supabase
-    .from('users')
+  const linked = rows[0] as any;
+  const { data: updatedProfile, error: updateError } = await (supabase
+    .from('users') as any)
     .update({
       auth_id: authUserId,
       email: normalizedEmail,
@@ -190,20 +186,21 @@ export async function loginWithEmailPassword(
         .single();
 
       if (orgData) {
+        const org = orgData as any;
         // Check if organization is active
-        if (!orgData.is_active) {
+        if (!org.is_active) {
           throw {
             code: AuthErrorCode.INACTIVE_ORG,
             message: 'Your organization is currently inactive',
-            details: { orgId: orgData.id },
+            details: { orgId: org.id },
           } as AuthError;
         }
 
         organization = {
-          id: orgData.id,
-          name: orgData.name,
-          is_active: orgData.is_active,
-          settings: orgData.settings,
+          id: org.id,
+          name: org.name,
+          is_active: org.is_active,
+          settings: org.settings,
         };
       }
     }
@@ -330,19 +327,20 @@ export async function verifyMagicLink(
         .single();
 
       if (orgData) {
-        if (!orgData.is_active) {
+        const org = orgData as any;
+        if (!org.is_active) {
           throw {
             code: AuthErrorCode.INACTIVE_ORG,
             message: 'Your organization is currently inactive',
-            details: { orgId: orgData.id },
+            details: { orgId: org.id },
           } as AuthError;
         }
 
         organization = {
-          id: orgData.id,
-          name: orgData.name,
-          is_active: orgData.is_active,
-          settings: orgData.settings,
+          id: org.id,
+          name: org.name,
+          is_active: org.is_active,
+          settings: org.settings,
         };
       }
     }

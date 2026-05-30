@@ -78,10 +78,11 @@ app.use((err, _req, res, _next) => {
 	const message = err instanceof Error ? err.message : 'Internal server error';
 	const details = process.env.NODE_ENV === 'production' ? undefined : err;
 
-	res.status(500).json({
+	const statusCode = err.statusCode || 500;
+	res.status(statusCode).json({
 		success: false,
 		error: {
-			code: 'INTERNAL_SERVER_ERROR',
+			code: err.code || 'INTERNAL_SERVER_ERROR',
 			message,
 			details,
 		},

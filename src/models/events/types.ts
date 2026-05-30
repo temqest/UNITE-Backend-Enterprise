@@ -87,6 +87,14 @@ export interface EventRow {
   post_event_notes: string | null;
   post_event_attachments: string[];
   is_public: boolean;
+  coverage_area_id: string | null;
+  coverage_area_psgc_code: string | null;
+  coverage_area_boundary_id: string | null;
+  coverage_area_name: string | null;
+  coverage_area_province: string | null;
+  coverage_area_municipality: string | null;
+  coverage_area_barangay: string | null;
+  coverage_area_normalized_key: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -113,6 +121,14 @@ export interface EventCreateInput {
   visibility?: EventVisibility;
   requested_by_user_id?: string | null;
   is_public?: boolean;
+  coverage_area_id?: string | null;
+  coverage_area_psgc_code?: string | null;
+  coverage_area_boundary_id?: string | null;
+  coverage_area_name?: string | null;
+  coverage_area_province?: string | null;
+  coverage_area_municipality?: string | null;
+  coverage_area_barangay?: string | null;
+  coverage_area_normalized_key?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
 }
@@ -141,6 +157,14 @@ export interface EventUpdateInput {
   post_event_notes?: string | null;
   post_event_attachments?: string[];
   is_public?: boolean;
+  coverage_area_id?: string | null;
+  coverage_area_psgc_code?: string | null;
+  coverage_area_boundary_id?: string | null;
+  coverage_area_name?: string | null;
+  coverage_area_province?: string | null;
+  coverage_area_municipality?: string | null;
+  coverage_area_barangay?: string | null;
+  coverage_area_normalized_key?: string | null;
   updated_by?: string | null;
 }
 

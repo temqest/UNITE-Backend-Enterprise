@@ -161,6 +161,14 @@ CREATE TABLE IF NOT EXISTS public.events (
     post_event_notes TEXT,
     post_event_attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_public BOOLEAN NOT NULL DEFAULT FALSE,
+    coverage_area_id UUID REFERENCES public.organization_coverage_areas(id) ON DELETE SET NULL,
+    coverage_area_psgc_code TEXT,
+    coverage_area_boundary_id TEXT,
+    coverage_area_name TEXT,
+    coverage_area_province TEXT,
+    coverage_area_municipality TEXT,
+    coverage_area_barangay TEXT,
+    coverage_area_normalized_key TEXT,
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
     updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -243,6 +251,15 @@ CREATE INDEX IF NOT EXISTS events_plotting_calendar_id_idx
 
 CREATE INDEX IF NOT EXISTS events_extra_data_gin_idx
     ON public.events USING GIN (extra_data);
+
+CREATE INDEX IF NOT EXISTS events_coverage_area_id_idx
+    ON public.events (org_id, coverage_area_id);
+
+CREATE INDEX IF NOT EXISTS events_coverage_area_psgc_idx
+    ON public.events (org_id, coverage_area_psgc_code);
+
+CREATE INDEX IF NOT EXISTS events_coverage_area_normalized_key_idx
+    ON public.events (org_id, coverage_area_normalized_key);
 
 DROP TRIGGER IF EXISTS trg_events_set_updated_at ON public.events;
 CREATE TRIGGER trg_events_set_updated_at

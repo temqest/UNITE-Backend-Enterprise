@@ -5,6 +5,23 @@ import { authorize, requireActiveUser, requireOrgScope } from '../../../../midde
 import { validateMiddleware as validate } from '../../../../middelware/validate.middleware';
 import * as controller from '../../controllers/coverage-areas/coverage-areas.controller';
 import * as validators from '../../validators/coverage-areas/coverage-areas.validators';
+import { z } from 'zod';
+
+type ValidationResult =
+  | { success: true; data: unknown }
+  | { success: false; error: unknown };
+
+function schemaValidator(schema: z.ZodTypeAny): { validate: (payload: unknown) => ValidationResult } {
+  return {
+    validate: (payload: unknown): ValidationResult => {
+      const parsed = schema.safeParse(payload);
+      if (!parsed.success) {
+        return { success: false, error: parsed.error.issues };
+      }
+      return { success: true, data: parsed.data };
+    },
+  };
+}
 
 const router = Router();
 
@@ -15,7 +32,7 @@ router.use(requireOrgScope);
 router.get(
   '/',
   authorize('coverage.read'),
-  validate(validators.listCoverageAreasQuerySchema),
+  validate(schemaValidator(validators.listCoverageAreasQuerySchema), 'query'),
   asyncHandler(controller.listCoverageAreas)
 );
 
@@ -28,14 +45,14 @@ router.get(
 router.post(
   '/',
   authorize('coverage.create'),
-  validate(validators.createCoverageAreaSchema),
+  validate(schemaValidator(validators.createCoverageAreaSchema)),
   asyncHandler(controller.createCoverageArea)
 );
 
 router.patch(
   '/:id',
   authorize('coverage.update'),
-  validate(validators.updateCoverageAreaSchema),
+  validate(schemaValidator(validators.updateCoverageAreaSchema)),
   asyncHandler(controller.updateCoverageArea)
 );
 
@@ -43,6 +60,12 @@ router.delete(
   '/:id',
   authorize('coverage.delete'),
   asyncHandler(controller.deleteCoverageArea)
+);
+
+router.post(
+  '/:id/reconcile-events',
+  authorize('coverage.update'),
+  asyncHandler(controller.reconcileEvents)
 );
 
 export { router as coverageAreasRouter };

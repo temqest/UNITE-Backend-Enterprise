@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS public.organization_coverage_areas (
     
     psgc_code TEXT,
     geometry JSONB,
+    province TEXT,
+    municipality TEXT,
+    barangay TEXT,
+    normalized_area_key TEXT,
     
     target_units INTEGER NOT NULL DEFAULT 0,
     target_donors INTEGER NOT NULL DEFAULT 0,
@@ -40,5 +44,7 @@ CREATE TABLE IF NOT EXISTS public.organization_coverage_areas (
 
 CREATE INDEX IF NOT EXISTS coverage_areas_org_id_idx ON public.organization_coverage_areas(org_id);
 CREATE INDEX IF NOT EXISTS coverage_areas_status_idx ON public.organization_coverage_areas(status);
+CREATE INDEX IF NOT EXISTS coverage_areas_psgc_code_idx ON public.organization_coverage_areas(org_id, psgc_code);
+CREATE INDEX IF NOT EXISTS coverage_areas_normalized_key_idx ON public.organization_coverage_areas(org_id, normalized_area_key);
 
 ALTER TABLE public.organization_coverage_areas ENABLE ROW LEVEL SECURITY;

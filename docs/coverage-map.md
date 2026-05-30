@@ -22,7 +22,7 @@ The `organization_coverage_areas` database table supports standard CRUD operatio
 
 To optimize network performance, we do not require the backend to return massive nationwide GeoJSON in every response. Instead:
 1. The frontend fetches the user's organizational coverage areas.
-2. It attempts to match these records against the local `mockCoverageAreas` (acting as a static GeoJSON boundary lookup file) by `area_name`.
+2. It attempts to match these records against the local `mockCoverageAreas` (acting as a static GeoJSON boundary lookup file) first by `psgc_code`, and fallback to `area_name`.
 3. If a match is found, the local `geometry` is attached to the area before rendering. Otherwise, it uses the `geometry` field from the backend if it was provided.
 
 ## Status color logic
@@ -35,5 +35,5 @@ To optimize network performance, we do not require the backend to return massive
 
 ## Future improvements
 
-- Implement a full boundary selection tool in the `ManageCoverageAreasModal` so admins can click a shape on a map to add it to their coverage area without typing names manually.
-- Store official PSGC codes during selection to make matching more robust than name-based string comparison.
+- Implement a full visual boundary selection tool in the `ManageCoverageAreasModal` so admins can click a shape on a map to add it to their coverage area without using a dropdown.
+- Expand the geographic dataset beyond Camarines Sur.

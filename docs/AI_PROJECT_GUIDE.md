@@ -8,7 +8,8 @@ Central navigation document for AI assistants, developers, and new chat sessions
 |-------|------|
 | Auth (hybrid Supabase + httpOnly refresh) | [docs/auth.md](./auth.md) |
 | Campaign & event flow (statuses, plotting) | [docs/campaign-event-flow.md](./campaign-event-flow.md) |
-| Donation coverage map (mock-only) | [docs/coverage-map.md](./coverage-map.md) |
+| Donation coverage map | [docs/coverage-map.md](./coverage-map.md) |
+| Event & Coverage Flow Analysis | [docs/event-coverage-flow-analysis.md](./event-coverage-flow-analysis.md) |
 | Backend architecture (deeper backend detail) | [../BACKEND_ARCHITECTURE.md](../BACKEND_ARCHITECTURE.md) |
 | Token lifetime notes | [../TOKEN_CONFIGURATION.md](../TOKEN_CONFIGURATION.md) |
 | RBAC / permissions planning | [../permission_plan.md](../permission_plan.md) |
@@ -33,7 +34,7 @@ Central navigation document for AI assistants, developers, and new chat sessions
 - Event lifecycle (manual create, plotting calendar, publish, participants)
 - Plotting calendars (appointment-style scheduling windows)
 - Blood inventory dashboard & transactions
-- Donation coverage map (**frontend mock data only**)
+- Donation coverage map (backend data + frontend GeoJSON boundaries)
 - Donor signup / public events / donor dashboard
 - Notifications, settings, geographic hierarchy
 - Chat **services/models exist**; **no `/api/v1/chat` routes** are mounted in `v1.routes.ts` (Needs verification if chat is used elsewhere)
@@ -246,7 +247,7 @@ See [campaign-event-flow.md](./campaign-event-flow.md) for statuses and public v
 | GeoJSON | `lib/data/geo/camarines-sur-coverage.json` |
 | Map style | `components/coverage-map/mapbox-debug.ts` — `COVERAGE_MAP_STYLE_URL = "mapbox://styles/mapbox/streets-v12"` |
 | Debug | `app/map-debug/page.tsx` |
-| Backend | **None** — mock only ([coverage-map.md](./coverage-map.md)) |
+| Backend | `/api/v1/coverage-areas` |
 
 ### Inventory Management (`/dashboard/inventory`)
 
@@ -563,7 +564,7 @@ Never commit real secrets. Do not document actual values here.
 - Plotting reservation creates an event with **`status: plotted`**, **`setup_status: needs_details`**, not a separate reservation entity.
 - **`POST /api/v1/events`** must not use `creation_method: plotting_calendar`** — use `plot-event` endpoint.
 - **No `campaigns` table** in v1; campaign UI uses events.
-- **Donation coverage map** is frontend-only with mock Bicol data until backend endpoints exist.
+- **Donation coverage map** uses real backend data, merged with local mock GeoJSON boundaries for shapes.
 - GeoJSON scope is **Camarines Sur** sample (`lib/data/geo/camarines-sur-coverage.json`), not nationwide.
 - **Public events** require `published` + `setup_status: complete` + public visibility ([campaign-event-flow.md](./campaign-event-flow.md)).
 - Frontend prototype folder is **gitignored** in this repo.
@@ -607,7 +608,7 @@ Never commit real secrets. Do not document actual values here.
 
 ## 14. Future TODOs
 
-- [ ] Backend API for **donation coverage map** (replace `lib/mock-coverage-areas.ts`)
+- [x] Backend API for **donation coverage map** (replace `lib/mock-coverage-areas.ts`)
 - [ ] Real GeoJSON / boundary service integration (regional, not full country inline)
 - [ ] Dedicated **`campaigns` table** if product requires multi-event campaigns ([campaign-event-flow.md](./campaign-event-flow.md))
 - [ ] Mount **chat** routes if product needs in-app messaging over HTTP

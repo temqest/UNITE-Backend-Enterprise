@@ -26,6 +26,7 @@ import {
   isGeoAreaMatch,
   toServiceError,
 } from './event.types';
+import { normalizeGeoAreaKey } from '../../utils/geo';
 
 const eventTypeSchema = z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
 const eventStatusSchema = z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
@@ -53,6 +54,14 @@ const EventCreateSchema = z.object({
   visibility: eventVisibilitySchema.optional(),
   requested_by_user_id: z.string().uuid().optional().nullable(),
   is_public: z.boolean().optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
   created_by: z.string().uuid().optional().nullable(),
   updated_by: z.string().uuid().optional().nullable(),
 }).superRefine((value, context) => {
@@ -89,6 +98,14 @@ const EventUpdateSchema = z.object({
   post_event_notes: z.string().trim().optional().nullable(),
   post_event_attachments: z.array(z.string().url()).optional(),
   is_public: z.boolean().optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
   updated_by: z.string().uuid().optional().nullable(),
 }).superRefine((value, context) => {
   if (value.start_time && value.end_time && value.start_time >= value.end_time) {
@@ -136,6 +153,14 @@ const CompleteEventDetailsSchema = z.object({
   hosting_organization: z.string().trim().optional().nullable(),
   extra_data: z.record(z.string(), z.unknown()).optional(),
   assigned_staff_ids: z.array(z.string().uuid()).optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
 }).superRefine((value, context) => {
   if (value.start_time && value.end_time && value.start_time >= value.end_time) {
     context.addIssue({
@@ -230,6 +255,25 @@ function isPublishedVisibility(event: Pick<EventRow, 'status' | 'visibility' | '
 
 export class EventService {
   constructor(private readonly supabase: SupabaseClient) {}
+
+  private async autoMatchCoverageArea(orgId: string, event: Partial<EventRow>): Promise<string | null> {
+    if (event.coverage_area_id) {
+      return event.coverage_area_id;
+    }
+    if (!event.coverage_area_psgc_code && !event.coverage_area_normalized_key) {
+      return null;
+    }
+    let query = this.supabase.from('organization_coverage_areas').select('id').eq('org_id', orgId);
+    if (event.coverage_area_psgc_code && event.coverage_area_normalized_key) {
+      query = query.or(`psgc_code.eq.${event.coverage_area_psgc_code},normalized_area_key.eq.${event.coverage_area_normalized_key}`);
+    } else if (event.coverage_area_psgc_code) {
+      query = query.eq('psgc_code', event.coverage_area_psgc_code);
+    } else if (event.coverage_area_normalized_key) {
+      query = query.eq('normalized_area_key', event.coverage_area_normalized_key);
+    }
+    const { data } = await query.maybeSingle();
+    return data ? data.id : null;
+  }
 
   private async getActorById(userId: string): Promise<ServiceResult<UserRow>> {
     const { data, error } = await this.supabase.from('users').select('*').eq('id', userId).single();
@@ -806,11 +850,30 @@ export class EventService {
         post_event_notes: null,
         post_event_attachments: [],
         is_public: isPublic,
+        coverage_area_id: parsed.coverage_area_id ?? null,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code ?? null,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id ?? null,
+        coverage_area_name: parsed.coverage_area_name ?? null,
+        coverage_area_province: parsed.coverage_area_province ?? null,
+        coverage_area_municipality: parsed.coverage_area_municipality ?? null,
+        coverage_area_barangay: parsed.coverage_area_barangay ?? null,
+        coverage_area_normalized_key: (parsed.coverage_area_normalized_key ?? normalizeGeoAreaKey({
+          region: null,
+          province: parsed.coverage_area_province,
+          municipality_or_city: parsed.coverage_area_municipality,
+          barangay: parsed.coverage_area_barangay,
+        })) || null,
         created_by: parsed.created_by ?? actor.id,
         updated_by: parsed.updated_by ?? actor.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+
+      if (!eventForValidation.coverage_area_normalized_key) {
+        eventForValidation.coverage_area_normalized_key = null; // Enforce null if empty string
+      }
+
+      eventForValidation.coverage_area_id = await this.autoMatchCoverageArea(parsed.org_id, eventForValidation);
 
       const windowCheck = await this.validateEventWindow(eventForValidation);
       if (windowCheck.error) {
@@ -846,6 +909,14 @@ export class EventService {
           visibility,
           requested_by_user_id: parsed.requested_by_user_id ?? actor.id,
           is_public: isPublic,
+          coverage_area_id: eventForValidation.coverage_area_id,
+          coverage_area_psgc_code: eventForValidation.coverage_area_psgc_code,
+          coverage_area_boundary_id: eventForValidation.coverage_area_boundary_id,
+          coverage_area_name: eventForValidation.coverage_area_name,
+          coverage_area_province: eventForValidation.coverage_area_province,
+          coverage_area_municipality: eventForValidation.coverage_area_municipality,
+          coverage_area_barangay: eventForValidation.coverage_area_barangay,
+          coverage_area_normalized_key: eventForValidation.coverage_area_normalized_key,
           created_by: parsed.created_by ?? actor.id,
           updated_by: parsed.updated_by ?? actor.id,
         })
@@ -965,6 +1036,14 @@ export class EventService {
         address: parsed.address !== undefined ? parsed.address : existing.address,
         description: parsed.description !== undefined ? parsed.description : existing.description,
         image_url: parsed.image_url !== undefined ? parsed.image_url : existing.image_url,
+        coverage_area_id: parsed.coverage_area_id !== undefined ? parsed.coverage_area_id : existing.coverage_area_id,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code !== undefined ? parsed.coverage_area_psgc_code : existing.coverage_area_psgc_code,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id !== undefined ? parsed.coverage_area_boundary_id : existing.coverage_area_boundary_id,
+        coverage_area_name: parsed.coverage_area_name !== undefined ? parsed.coverage_area_name : existing.coverage_area_name,
+        coverage_area_province: parsed.coverage_area_province !== undefined ? parsed.coverage_area_province : existing.coverage_area_province,
+        coverage_area_municipality: parsed.coverage_area_municipality !== undefined ? parsed.coverage_area_municipality : existing.coverage_area_municipality,
+        coverage_area_barangay: parsed.coverage_area_barangay !== undefined ? parsed.coverage_area_barangay : existing.coverage_area_barangay,
+        coverage_area_normalized_key: parsed.coverage_area_normalized_key !== undefined ? parsed.coverage_area_normalized_key : existing.coverage_area_normalized_key,
         extra_data: extraData,
         setup_status: setupStatus,
         setup_completed_at: setupStatus === 'complete' ? (existing.setup_completed_at ?? new Date().toISOString()) : null,
@@ -986,6 +1065,9 @@ export class EventService {
         is_public: patch.is_public ?? existing.is_public,
         hosting_organization: patch.hosting_organization ?? existing.hosting_organization,
       };
+
+      candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
+      patch.coverage_area_id = candidate.coverage_area_id;
 
       if (!canTransitionEventStatus(existing.status, candidate.status)) {
         return {
@@ -1249,7 +1331,30 @@ export class EventService {
         extra_data: mergedExtraData,
         visibility: parsed.visibility ?? existing.visibility,
         is_public: parsed.is_public ?? existing.is_public,
+        coverage_area_id: parsed.coverage_area_id !== undefined ? parsed.coverage_area_id : existing.coverage_area_id,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code !== undefined ? parsed.coverage_area_psgc_code : existing.coverage_area_psgc_code,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id !== undefined ? parsed.coverage_area_boundary_id : existing.coverage_area_boundary_id,
+        coverage_area_name: parsed.coverage_area_name !== undefined ? parsed.coverage_area_name : existing.coverage_area_name,
+        coverage_area_province: parsed.coverage_area_province !== undefined ? parsed.coverage_area_province : existing.coverage_area_province,
+        coverage_area_municipality: parsed.coverage_area_municipality !== undefined ? parsed.coverage_area_municipality : existing.coverage_area_municipality,
+        coverage_area_barangay: parsed.coverage_area_barangay !== undefined ? parsed.coverage_area_barangay : existing.coverage_area_barangay,
+        coverage_area_normalized_key: parsed.coverage_area_normalized_key !== undefined ? parsed.coverage_area_normalized_key : existing.coverage_area_normalized_key,
       };
+
+      if (parsed.coverage_area_province !== undefined || parsed.coverage_area_municipality !== undefined || parsed.coverage_area_barangay !== undefined) {
+        if (!candidate.coverage_area_normalized_key) {
+           candidate.coverage_area_normalized_key = normalizeGeoAreaKey({
+             region: null,
+             province: candidate.coverage_area_province,
+             municipality_or_city: candidate.coverage_area_municipality,
+             barangay: candidate.coverage_area_barangay,
+           }) || null;
+           parsed.coverage_area_normalized_key = candidate.coverage_area_normalized_key;
+        }
+      }
+
+      candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
+      parsed.coverage_area_id = candidate.coverage_area_id;
 
       const windowCheck = await this.validateEventWindow(candidate);
       if (windowCheck.error) {

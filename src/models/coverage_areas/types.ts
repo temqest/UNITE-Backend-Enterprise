@@ -10,6 +10,10 @@ export interface CoverageAreaRow {
   
   psgc_code: string | null;
   geometry: any | null; // JSONB
+  province: string | null;
+  municipality: string | null;
+  barangay: string | null;
+  normalized_area_key: string | null;
   
   target_units: number;
   target_donors: number;
