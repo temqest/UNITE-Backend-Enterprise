@@ -529,62 +529,20 @@ export class EventService {
     return { data: true, error: null };
   }
 
-  private async validatePublishReadiness(
-    event: EventRow,
-    assignedStaffIds?: string[]
-  ): Promise<ServiceResult<true>> {
+  private async validatePublishReadiness(event: EventRow): Promise<ServiceResult<true>> {
     const missing: string[] = [];
-    const extra = normalizeExtraData(event.extra_data);
 
     if (!event.title?.trim()) missing.push('Event title');
+    if (!event.type) missing.push('Event type');
     if (!event.event_date) missing.push('Event date');
-    if (!event.start_time || !event.end_time) missing.push('Start and end time');
-    if (!event.address?.trim()) missing.push('Venue or address');
-    if (!event.description?.trim()) missing.push('Description');
     if (!event.hosting_organization?.trim()) missing.push('Hosting organization');
-
-    if (event.type === 'blood_drive') {
-      const targetDonation = getNumberValue(extra, 'target_donation');
-      const collectionGoal = getNumberValue(extra, 'collection_goal');
-      if (targetDonation <= 0 && collectionGoal <= 0) {
-        missing.push('Donation goal');
-      }
-    }
-
-    const inlineStaffCount =
-      (assignedStaffIds?.length ?? 0) +
-      getArrayCount(extra, 'assigned_staff');
-
-    if (inlineStaffCount === 0) {
-      const existingStaffCount = await this.getAssignedStaffCount(event.id);
-      if (existingStaffCount.error || existingStaffCount.data == null) {
-        return { data: null, error: existingStaffCount.error };
-      }
-
-      if (existingStaffCount.data === 0) {
-        missing.push('Assigned staff');
-      }
-    }
-
-    const publicRegistrationEnabled =
-      event.is_public ||
-      event.visibility === 'public' ||
-      extra.public_registration_enabled === true ||
-      extra.allow_donor_signup === true;
-
-    if (publicRegistrationEnabled) {
-      if (!getTextValue(extra, 'campaign_title')) missing.push('Campaign title');
-      if (!getTextValue(extra, 'campaign_description')) missing.push('Campaign description');
-      if (!getTextValue(extra, 'public_contact_person')) missing.push('Public contact person');
-      if (!getTextValue(extra, 'public_contact_number')) missing.push('Public contact number');
-    }
 
     if (missing.length > 0) {
       return {
         data: null,
         error: toServiceError(
           'EVENT_SETUP_INCOMPLETE',
-          'Complete required event setup details before scheduling or publishing.',
+          'Please complete the required fields before publishing.',
           { missing }
         ),
       };
@@ -1039,7 +997,7 @@ export class EventService {
       }
 
       if (candidate.status === 'scheduled' || candidate.status === 'published') {
-        const readiness = await this.validatePublishReadiness(candidate, parsed.assigned_staff_ids);
+        const readiness = await this.validatePublishReadiness(candidate);
         if (readiness.error) {
           return { data: null, error: readiness.error };
         }

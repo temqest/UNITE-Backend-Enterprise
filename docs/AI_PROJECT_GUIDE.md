@@ -171,6 +171,8 @@ UNITE-Backend-Enterprise/
 
 See [campaign-event-flow.md](./campaign-event-flow.md) for statuses and public visibility rules.
 
+**Publish readiness rule:** the campaign publish flow only blocks on the core fields marked required in the modal: event title, hosting organization, event type, and event date. Optional details such as description, address extras, goals, staff, campaign messaging, and public notes should not prevent publishing.
+
 ### Plotting Calendar (`/dashboard/plotting-calendars`)
 
 | Item | Path / detail |
