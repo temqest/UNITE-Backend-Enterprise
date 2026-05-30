@@ -155,6 +155,10 @@ const shutdown = (reason) => {
 
   console.log(`[server] ${reason} received, shutting down gracefully...`);
 
+  if (server.closeAllConnections) {
+    server.closeAllConnections();
+  }
+
   forcedShutdownTimer = setTimeout(() => {
     console.warn('[server] Forced shutdown after timeout.');
     process.exit(1);
@@ -182,15 +186,16 @@ const handleExit = (reason) => {
   shutdown(reason || 'EXIT');
 };
 
-if (process.stdin.isTTY) {
-  process.stdin.once('end', () => handleExit('stdin-end'));
-  process.stdin.once('close', () => handleExit('stdin-close'));
-}
+process.stdin.resume(); // Keep stdin flowing to detect closures
+process.stdin.once('end', () => handleExit('stdin-end'));
+process.stdin.once('close', () => handleExit('stdin-close'));
+process.stdin.once('error', () => handleExit('stdin-error'));
 
 process.once('SIGINT', () => handleExit('SIGINT'));
 process.once('SIGTERM', () => handleExit('SIGTERM'));
 process.once('SIGBREAK', () => handleExit('SIGBREAK')); // Windows Ctrl+Break
 process.once('SIGHUP', () => handleExit('SIGHUP'));
+process.once('SIGUSR2', () => handleExit('SIGUSR2')); // Nodemon restarts
 process.once('disconnect', () => handleExit('disconnect'));
 process.on('uncaughtException', (err) => {
   console.error('[server] Uncaught exception:', err);

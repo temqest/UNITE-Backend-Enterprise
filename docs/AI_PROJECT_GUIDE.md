@@ -526,12 +526,17 @@ Never commit real secrets. Do not document actual values here.
 
 ## 9. Design System Notes
 
+**UI Component Migration**: We are currently migrating away from heavy reliance on `HeroUI` (`@heroui/react`) towards native, shared React components stored in `unite-frontend-enterprise-prototype/components/ui/` (e.g., `dropdown.tsx`). 
+- **Rule**: When building new features or refactoring, prefer creating/using simple shared components in `components/ui/` over introducing new HeroUI usage unless absolutely necessary for complex widget behavior.
+- See `docs/ui-component-migration.md` for migration details.
+
 | Topic | Convention |
 |-------|------------|
 | **Font** | Plus Jakarta Sans — `app/layout.tsx` (`public/fonts/PlusJakartaSans-Variable.ttf`), `--font-plus-jakarta-sans` |
 | **Brand colors** | `--color-brand-red: #ed1010`, `--color-brand-blue: #0f4c81`, `--color-surface: #f3f4f6` in `app/globals.css` |
 | **Buttons** | `components/ui/button.tsx` — CVA variants: `default` (brand-red), `secondary`, `ghost`, `outline`, `destructive`; `rounded-xl` |
 | **Cards** | `components/ui/card.tsx` |
+| **Dropdowns/Menus** | Use `AppDropdown` from `components/ui/dropdown.tsx` instead of HeroUI dropdowns. |
 | **Modals** | Campaign/staff: dedicated modal components; plotting: inline `SetupShell` / `ModalShell` on plotting page |
 | **Sidebar** | `AppSidebar.tsx` — active route `bg-brand-red`; Events subgroup |
 | **Layout** | `AppShell` = topbar + sidebar + content; slate backgrounds |
@@ -550,7 +555,7 @@ Never commit real secrets. Do not document actual values here.
 | **Backend handlers** | Controllers thin; logic in `src/services/**` |
 | **Validation** | Zod in validators + services |
 | **Errors** | API `{ success: false, error: { code, message } }` |
-| **Loading (UI)** | Local `useState` loading flags on pages; auth uses `authStatus: loading \| authenticated \| unauthenticated` |
+| **Loading (UI)** | Local `useState` loading flags on pages; use reusable skeleton components (`components/ui/skeleton.tsx`) to prevent layout shift; auth uses `authStatus: loading \| authenticated \| unauthenticated` |
 | **Forms** | react-hook-form + Zod on auth/signup; plotting page uses controlled local state |
 | **Naming** | kebab-case routes; `plotting-calendars` API segment; DB snake_case |
 
