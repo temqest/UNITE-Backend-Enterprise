@@ -182,6 +182,11 @@ const handleExit = (reason) => {
   shutdown(reason || 'EXIT');
 };
 
+if (process.stdin.isTTY) {
+  process.stdin.once('end', () => handleExit('stdin-end'));
+  process.stdin.once('close', () => handleExit('stdin-close'));
+}
+
 process.once('SIGINT', () => handleExit('SIGINT'));
 process.once('SIGTERM', () => handleExit('SIGTERM'));
 process.once('SIGBREAK', () => handleExit('SIGBREAK')); // Windows Ctrl+Break

@@ -47,6 +47,10 @@ export const PERMISSION_CATALOG = [
   'reports.export',
   'settings.read',
   'settings.update',
+  'coverage.read',
+  'coverage.create',
+  'coverage.update',
+  'coverage.delete',
 ] as const;
 
 export type PermissionName = (typeof PERMISSION_CATALOG)[number];
@@ -99,6 +103,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'reports.export',
     'settings.read',
     'settings.update',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
   coordinator: [
     'campaigns.read',
@@ -117,6 +125,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'documents.read',
     'documents.write',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 
   doctor: [
@@ -130,6 +142,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'inventory.update',
     'documents.read',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 
   nurse: [
@@ -139,6 +155,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'inventory.read',
     'inventory.update',
     'documents.read',
+    'coverage.read',
   ],
 
   stakeholder: [
@@ -148,6 +165,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'events.update',
     'chat.read',
     'documents.read',
+    'coverage.read',
   ],
 
   donor: [
@@ -160,6 +178,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'campaigns.read',
     'events.read',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 };
 

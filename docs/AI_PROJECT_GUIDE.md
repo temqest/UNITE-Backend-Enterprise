@@ -297,6 +297,7 @@ Auth is **not** temporary — hybrid Supabase + httpOnly refresh cookie is the c
 | `/settings` | `routes/settings/settings.routes.ts` | Org + user settings |
 | `/organizations` | `routes/organizations/organizations.routes.ts` | `GET /lookup` (public) |
 | `/geographic` | `routes/geographic/geographic.routes.ts` | PH hierarchy CRUD + search |
+| `/coverage-areas` | `routes/coverage-areas/coverage-areas.routes.ts` | Coverage areas CRUD |
 | `/notifications` | `routes/notifications/notifications.routes.ts` | List, unread, mark read |
 | `/donor` | `routes/donor/donor.routes.ts` | Donor signup, public events, profile |
 
@@ -387,7 +388,7 @@ All authenticated user routes use: `authMiddleware` → `requireActiveUser` → 
 | Plotting calendar | `app/dashboard/plotting-calendars/page.tsx` | `/api/v1/plotting-calendars/*` | Single large page file |
 | My events | `app/dashboard/my-events/**` | `/api/v1/events/my-events`, `/:id/stats` | |
 | Event calendar | `app/dashboard/calendar/page.tsx` | `GET /api/v1/events` | Status colors / badges |
-| Coverage map | `app/dashboard/coverage-map/**` | **None** | Mock + GeoJSON |
+| Coverage map | `app/dashboard/coverage-map/**` | `/api/v1/coverage-areas/*` | Hybrid backend data + local GeoJSON |
 | Inventory | `app/dashboard/inventory/page.tsx` | `/api/v1/inventory/*` | |
 | Staff | `app/dashboard/staff/**` | `/api/v1/users/*` | |
 | Settings | `app/dashboard/settings/page.tsx` | `/api/v1/settings/*` | |
