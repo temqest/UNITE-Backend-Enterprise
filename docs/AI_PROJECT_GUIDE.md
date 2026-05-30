@@ -254,8 +254,9 @@ See [campaign-event-flow.md](./campaign-event-flow.md) for statuses and public v
 | Item | Path |
 |------|------|
 | Page | `app/dashboard/inventory/page.tsx` (inline UI; HeroUI calendar/popover in places) |
-| API | `getInventoryDashboard`, `getInventoryBloodTypeDetail`, `recordInventoryTransaction` |
-| Backend | `GET /api/v1/inventory/dashboard`, `GET /api/v1/inventory/blood-types/:bloodType`, `POST /api/v1/inventory/transactions` |
+| Components | `components/inventory/BatchUpdateModal.tsx` |
+| API | `getInventoryDashboard`, `getInventoryBloodTypeDetail`, `recordInventoryTransaction`, `batchUpdateInventory`, `getInventoryTransactions` |
+| Backend | `GET /api/v1/inventory/dashboard`, `GET /api/v1/inventory/blood-types/:bloodType`, `POST /api/v1/inventory/transactions`, `POST /api/v1/inventory/batch-update`, `GET /api/v1/inventory/transactions` |
 | Permission | `inventory.read`, `inventory.update` |
 
 ### Staff Management (`/dashboard/staff`)
