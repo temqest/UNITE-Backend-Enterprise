@@ -331,7 +331,7 @@ export class EventService {
   }
 
   private async validateCreationAgainstSettings(
-    payload: { org_id: string; event_date: string; start_time: string; end_time: string; exclude_event_id?: string },
+    payload: { org_id: string; event_date: string; start_time: string; end_time: string; exclude_event_id?: string; creation_method?: string },
     settings: OrganizationSettingsRow | null
   ): Promise<ServiceResult<true>> {
     if (!settings) {
@@ -394,32 +394,34 @@ export class EventService {
     const filteredSameDayEvents = ((sameDayEvents ?? []) as Array<{ id: string; start_time: string | null; end_time: string | null }>)
       .filter((event) => event.id !== payload.exclude_event_id);
 
-    if (filteredSameDayEvents.length >= settings.max_events_per_day) {
-      return {
-        data: null,
-        error: toServiceError('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
-      };
-    }
-
-    if (settings.prevent_double_booking_same_day) {
-      const start = this.parseTimeToMinutes(payload.start_time);
-      const end = this.parseTimeToMinutes(payload.end_time);
-
-      const hasOverlap = filteredSameDayEvents.some((existing) => {
-        if (!existing.start_time || !existing.end_time) {
-          return false;
-        }
-
-        const existingStart = this.parseTimeToMinutes(existing.start_time);
-        const existingEnd = this.parseTimeToMinutes(existing.end_time);
-        return start < existingEnd && end > existingStart;
-      });
-
-      if (hasOverlap) {
+    if (payload.creation_method !== 'plotting_calendar') {
+      if (filteredSameDayEvents.length >= settings.max_events_per_day) {
         return {
           data: null,
-          error: toServiceError('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
+          error: toServiceError('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
         };
+      }
+
+      if (settings.prevent_double_booking_same_day) {
+        const start = this.parseTimeToMinutes(payload.start_time);
+        const end = this.parseTimeToMinutes(payload.end_time);
+
+        const hasOverlap = filteredSameDayEvents.some((existing) => {
+          if (!existing.start_time || !existing.end_time) {
+            return false;
+          }
+
+          const existingStart = this.parseTimeToMinutes(existing.start_time);
+          const existingEnd = this.parseTimeToMinutes(existing.end_time);
+          return start < existingEnd && end > existingStart;
+        });
+
+        if (hasOverlap) {
+          return {
+            data: null,
+            error: toServiceError('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
+          };
+        }
       }
     }
 
@@ -602,7 +604,7 @@ export class EventService {
   }
 
   private async validateEventWindow(
-    event: Pick<EventRow, 'org_id' | 'event_date' | 'start_time' | 'end_time' | 'id'>
+    event: Pick<EventRow, 'org_id' | 'event_date' | 'start_time' | 'end_time' | 'id' | 'creation_method'>
   ): Promise<ServiceResult<true>> {
     if (!event.start_time || !event.end_time) {
       return { data: true, error: null };
@@ -620,6 +622,7 @@ export class EventService {
         start_time: event.start_time,
         end_time: event.end_time,
         exclude_event_id: event.id,
+        creation_method: event.creation_method,
       },
       settingsResult.data
     );

@@ -143,7 +143,7 @@ UNITE-Backend-Enterprise/
 | `/dashboard/plotting-calendars` | `app/dashboard/plotting-calendars/page.tsx` | Plotting calendar admin + reserve |
 | `/dashboard/my-events` | `app/dashboard/my-events/page.tsx` | My events list |
 | `/dashboard/my-events/[eventId]` | `app/dashboard/my-events/[eventId]/page.tsx` | Event detail / participants |
-| `/dashboard/calendar` | `app/dashboard/calendar/page.tsx` | Internal event calendar view |
+| `/dashboard/calendar` | `app/dashboard/calendar/page.tsx` | Internal event calendar view with custom compact event pills and status/source summary badges |
 | `/dashboard/inventory` | `app/dashboard/inventory/page.tsx` | Inventory management |
 | `/dashboard/staff` | `app/dashboard/staff/page.tsx` | Staff management |
 | `/dashboard/settings` | `app/dashboard/settings/page.tsx` | Org/user settings |

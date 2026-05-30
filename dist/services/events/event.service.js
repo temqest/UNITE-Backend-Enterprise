@@ -318,28 +318,30 @@ class EventService {
         }
         const filteredSameDayEvents = (sameDayEvents ?? [])
             .filter((event) => event.id !== payload.exclude_event_id);
-        if (filteredSameDayEvents.length >= settings.max_events_per_day) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
-            };
-        }
-        if (settings.prevent_double_booking_same_day) {
-            const start = this.parseTimeToMinutes(payload.start_time);
-            const end = this.parseTimeToMinutes(payload.end_time);
-            const hasOverlap = filteredSameDayEvents.some((existing) => {
-                if (!existing.start_time || !existing.end_time) {
-                    return false;
-                }
-                const existingStart = this.parseTimeToMinutes(existing.start_time);
-                const existingEnd = this.parseTimeToMinutes(existing.end_time);
-                return start < existingEnd && end > existingStart;
-            });
-            if (hasOverlap) {
+        if (payload.creation_method !== 'plotting_calendar') {
+            if (filteredSameDayEvents.length >= settings.max_events_per_day) {
                 return {
                     data: null,
-                    error: (0, event_types_1.toServiceError)('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
+                    error: (0, event_types_1.toServiceError)('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
                 };
+            }
+            if (settings.prevent_double_booking_same_day) {
+                const start = this.parseTimeToMinutes(payload.start_time);
+                const end = this.parseTimeToMinutes(payload.end_time);
+                const hasOverlap = filteredSameDayEvents.some((existing) => {
+                    if (!existing.start_time || !existing.end_time) {
+                        return false;
+                    }
+                    const existingStart = this.parseTimeToMinutes(existing.start_time);
+                    const existingEnd = this.parseTimeToMinutes(existing.end_time);
+                    return start < existingEnd && end > existingStart;
+                });
+                if (hasOverlap) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
+                    };
+                }
             }
         }
         return { data: true, error: null };
@@ -414,57 +416,20 @@ class EventService {
         }
         return { data: true, error: null };
     }
-    async validatePublishReadiness(event, assignedStaffIds) {
+    async validatePublishReadiness(event) {
         const missing = [];
-        const extra = normalizeExtraData(event.extra_data);
         if (!event.title?.trim())
             missing.push('Event title');
+        if (!event.type)
+            missing.push('Event type');
         if (!event.event_date)
             missing.push('Event date');
-        if (!event.start_time || !event.end_time)
-            missing.push('Start and end time');
-        if (!event.address?.trim())
-            missing.push('Venue or address');
-        if (!event.description?.trim())
-            missing.push('Description');
         if (!event.hosting_organization?.trim())
             missing.push('Hosting organization');
-        if (event.type === 'blood_drive') {
-            const targetDonation = getNumberValue(extra, 'target_donation');
-            const collectionGoal = getNumberValue(extra, 'collection_goal');
-            if (targetDonation <= 0 && collectionGoal <= 0) {
-                missing.push('Donation goal');
-            }
-        }
-        const inlineStaffCount = (assignedStaffIds?.length ?? 0) +
-            getArrayCount(extra, 'assigned_staff');
-        if (inlineStaffCount === 0) {
-            const existingStaffCount = await this.getAssignedStaffCount(event.id);
-            if (existingStaffCount.error || existingStaffCount.data == null) {
-                return { data: null, error: existingStaffCount.error };
-            }
-            if (existingStaffCount.data === 0) {
-                missing.push('Assigned staff');
-            }
-        }
-        const publicRegistrationEnabled = event.is_public ||
-            event.visibility === 'public' ||
-            extra.public_registration_enabled === true ||
-            extra.allow_donor_signup === true;
-        if (publicRegistrationEnabled) {
-            if (!getTextValue(extra, 'campaign_title'))
-                missing.push('Campaign title');
-            if (!getTextValue(extra, 'campaign_description'))
-                missing.push('Campaign description');
-            if (!getTextValue(extra, 'public_contact_person'))
-                missing.push('Public contact person');
-            if (!getTextValue(extra, 'public_contact_number'))
-                missing.push('Public contact number');
-        }
         if (missing.length > 0) {
             return {
                 data: null,
-                error: (0, event_types_1.toServiceError)('EVENT_SETUP_INCOMPLETE', 'Complete required event setup details before scheduling or publishing.', { missing }),
+                error: (0, event_types_1.toServiceError)('EVENT_SETUP_INCOMPLETE', 'Please complete the required fields before publishing.', { missing }),
             };
         }
         return { data: true, error: null };
@@ -517,6 +482,7 @@ class EventService {
             start_time: event.start_time,
             end_time: event.end_time,
             exclude_event_id: event.id,
+            creation_method: event.creation_method,
         }, settingsResult.data);
     }
     async getEventById(eventId, actor) {
@@ -863,7 +829,7 @@ class EventService {
                 return { data: null, error: windowCheck.error };
             }
             if (candidate.status === 'scheduled' || candidate.status === 'published') {
-                const readiness = await this.validatePublishReadiness(candidate, parsed.assigned_staff_ids);
+                const readiness = await this.validatePublishReadiness(candidate);
                 if (readiness.error) {
                     return { data: null, error: readiness.error };
                 }

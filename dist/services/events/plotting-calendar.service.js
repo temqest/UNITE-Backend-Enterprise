@@ -602,7 +602,13 @@ class PlottingCalendarService {
                 const availabilityMode = resolveAvailabilityMode(day);
                 const flexibleWindow = resolveFlexibleWindow(day);
                 const enrichedSlots = (slotsByDay.get(day.id) ?? []).map((slot) => {
-                    const currentEvents = sameDayEvents.filter((event) => stripSeconds(event.start_time) === stripSeconds(slot.starts_at) && stripSeconds(event.end_time) === stripSeconds(slot.ends_at)).length;
+                    const currentEvents = sameDayEvents.filter((event) => {
+                        if (event.extra_data && 'slot_id' in event.extra_data && event.extra_data.slot_id) {
+                            return event.extra_data.slot_id === slot.id;
+                        }
+                        // fallback for legacy events that were plotted without a slot_id
+                        return stripSeconds(event.start_time) === stripSeconds(slot.starts_at) && stripSeconds(event.end_time) === stripSeconds(slot.ends_at);
+                    }).length;
                     const slotCapacity = slot.max_events_for_slot ?? calendarResult.data.max_events_per_slot;
                     const remainingSlotCapacity = slotCapacity != null ? Math.max(slotCapacity - currentEvents, 0) : null;
                     const slotOpen = dayOpen && slot.status === 'open' && (remainingSlotCapacity == null || remainingSlotCapacity > 0);
@@ -749,41 +755,31 @@ class PlottingCalendarService {
         if (availabilityResult.error || !availabilityResult.data) {
             return { data: null, error: availabilityResult.error };
         }
-        const items = availabilityResult.data.flatMap((day) => {
+        const items = availabilityResult.data.map((day) => {
             if (day.availability_mode === 'flexible') {
-                return [{
-                        day_id: day.id,
-                        event_date: day.date,
-                        day_status: day.status,
-                        slot: {
-                            label: 'Flexible time',
-                            start_time: day.flexible_starts_at ?? DEFAULT_FLEXIBLE_START,
-                            end_time: day.flexible_ends_at ?? DEFAULT_FLEXIBLE_END,
-                        },
-                        current_events: day.date_events,
-                        date_events: day.date_events,
-                        remaining_slot_capacity: null,
-                        remaining_date_capacity: day.remaining_day_capacity,
-                        available: day.available,
-                    }];
+                return {
+                    availability_mode: 'flexible',
+                    date: day.date,
+                    max_events: day.max_events_for_day,
+                    reserved_count: day.date_events,
+                    remaining_count: day.remaining_day_capacity,
+                    flexible_starts_at: day.flexible_starts_at ?? DEFAULT_FLEXIBLE_START,
+                    flexible_ends_at: day.flexible_ends_at ?? DEFAULT_FLEXIBLE_END,
+                };
             }
-            return day.slots.map((slot) => ({
-                day_id: day.id,
-                slot_id: slot.id,
-                event_date: day.date,
-                day_status: day.status,
-                slot_status: slot.status,
-                slot: {
-                    label: slot.label ?? undefined,
+            return {
+                availability_mode: 'slots',
+                date: day.date,
+                slots: day.slots.map((slot) => ({
+                    id: slot.id,
+                    label: slot.label ?? null,
                     start_time: slot.starts_at,
                     end_time: slot.ends_at,
-                },
-                current_events: slot.current_events,
-                date_events: day.date_events,
-                remaining_slot_capacity: slot.remaining_slot_capacity,
-                remaining_date_capacity: day.remaining_day_capacity,
-                available: slot.available,
-            }));
+                    max_events: slot.max_events_for_slot ?? null,
+                    reserved_count: slot.current_events,
+                    remaining_count: slot.remaining_slot_capacity,
+                })),
+            };
         });
         return { data: items, error: null };
     }
@@ -839,6 +835,7 @@ class PlottingCalendarService {
                     error: (0, event_types_1.toServiceError)('PLOTTING_DATE_FULL', 'The selected plotting calendar date is already full.'),
                 };
             }
+            let slotIdForExtraData = undefined;
             if (targetDay.availability_mode === 'slots') {
                 const targetAvailability = targetDay.slots.find((slot) => stripSeconds(slot.starts_at) === stripSeconds(parsed.start_time) && stripSeconds(slot.ends_at) === stripSeconds(parsed.end_time));
                 if (!targetAvailability) {
@@ -853,6 +850,7 @@ class PlottingCalendarService {
                         error: (0, event_types_1.toServiceError)('PLOTTING_SLOT_FULL', 'The selected plotting calendar slot is already full.'),
                     };
                 }
+                slotIdForExtraData = targetAvailability.id;
             }
             return this.eventService.createEvent(actor, {
                 org_id: actor.org_id,
@@ -867,6 +865,7 @@ class PlottingCalendarService {
                     ...(parsed.extra_data ?? {}),
                     plotted_from_calendar: true,
                     plotting_calendar_title: calendar.title,
+                    ...(slotIdForExtraData ? { slot_id: slotIdForExtraData } : {}),
                 },
                 status: 'plotted',
                 setup_status: 'needs_details',
