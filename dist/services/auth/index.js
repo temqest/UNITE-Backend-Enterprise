@@ -18,7 +18,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.completeGoogleSignup = exports.exchangeGoogleSession = exports.sendVerificationCode = exports.canResendVerificationCode = exports.verifySignupOtp = exports.clearLocalSession = exports.logoutAllDevices = exports.logout = exports.normalizePermission = exports.resolveCanonicalRole = exports.ROLE_DEFAULT_PERMISSIONS = exports.PERMISSION_CATALOG = exports.CANONICAL_ROLES = exports.getFallbackPermissions = exports.hasPermission = exports.resolveUserAuthorization = exports.getUserFromRequest = exports.hasRole = exports.hasSessionPermission = exports.getSessionTokens = exports.refreshSession = exports.validateSession = exports.getUserOrganization = exports.getCurrentUser = exports.verifyMagicLink = exports.sendMagicLink = exports.loginWithEmailPassword = void 0;
+exports.completeGoogleSignup = exports.exchangeGoogleSession = exports.sendVerificationCode = exports.canResendVerificationCode = exports.verifySignupOtp = exports.clearLocalSession = exports.logoutAllDevices = exports.logout = exports.normalizePermission = exports.resolveCanonicalRole = exports.ROLE_DEFAULT_PERMISSIONS = exports.PERMISSION_CATALOG = exports.CANONICAL_ROLES = exports.getFallbackPermissions = exports.hasPermission = exports.resolveUserAuthorization = exports.stripRefreshToken = exports.clearRefreshCookie = exports.setRefreshCookie = exports.revokeSupabaseSessionFromRequest = exports.revokeRefreshSessionFromRequest = exports.refreshAppSessionFromRequest = exports.tryCreateAppRefreshSession = exports.createAppRefreshSession = exports.getUserFromRequest = exports.hasRole = exports.hasSessionPermission = exports.getSessionTokens = exports.refreshSession = exports.validateSession = exports.getUserOrganization = exports.getCurrentUser = exports.verifyMagicLink = exports.sendMagicLink = exports.loginWithEmailPassword = void 0;
 // Types
 __exportStar(require("./auth.types"), exports);
 // Login Services
@@ -36,6 +36,15 @@ Object.defineProperty(exports, "getSessionTokens", { enumerable: true, get: func
 Object.defineProperty(exports, "hasSessionPermission", { enumerable: true, get: function () { return session_service_1.hasPermission; } });
 Object.defineProperty(exports, "hasRole", { enumerable: true, get: function () { return session_service_1.hasRole; } });
 Object.defineProperty(exports, "getUserFromRequest", { enumerable: true, get: function () { return session_service_1.getUserFromRequest; } });
+var http_session_service_1 = require("./http-session.service");
+Object.defineProperty(exports, "createAppRefreshSession", { enumerable: true, get: function () { return http_session_service_1.createAppRefreshSession; } });
+Object.defineProperty(exports, "tryCreateAppRefreshSession", { enumerable: true, get: function () { return http_session_service_1.tryCreateAppRefreshSession; } });
+Object.defineProperty(exports, "refreshAppSessionFromRequest", { enumerable: true, get: function () { return http_session_service_1.refreshAppSessionFromRequest; } });
+Object.defineProperty(exports, "revokeRefreshSessionFromRequest", { enumerable: true, get: function () { return http_session_service_1.revokeRefreshSessionFromRequest; } });
+Object.defineProperty(exports, "revokeSupabaseSessionFromRequest", { enumerable: true, get: function () { return http_session_service_1.revokeSupabaseSessionFromRequest; } });
+Object.defineProperty(exports, "setRefreshCookie", { enumerable: true, get: function () { return http_session_service_1.setRefreshCookie; } });
+Object.defineProperty(exports, "clearRefreshCookie", { enumerable: true, get: function () { return http_session_service_1.clearRefreshCookie; } });
+Object.defineProperty(exports, "stripRefreshToken", { enumerable: true, get: function () { return http_session_service_1.stripRefreshToken; } });
 var authorization_service_1 = require("./authorization.service");
 Object.defineProperty(exports, "resolveUserAuthorization", { enumerable: true, get: function () { return authorization_service_1.resolveUserAuthorization; } });
 Object.defineProperty(exports, "hasPermission", { enumerable: true, get: function () { return authorization_service_1.hasPermission; } });

@@ -74,6 +74,18 @@ const updateParticipantStatusValidator = {
       .safeParse(payload),
 };
 
+const bulkUpdateParticipantStatusValidator = {
+  validate: (payload: unknown) =>
+    z
+      .object({
+        event_id: z.string().uuid().optional(),
+        participant_ids: z.array(z.string().uuid()).min(1).max(100),
+        status: z.enum(['applied', 'confirmed', 'participated', 'donated', 'no_show']),
+        notes: z.string().optional().nullable(),
+      })
+      .safeParse(payload),
+};
+
 function sendError(res: Response, statusCode: number, error: ApiError): void {
   res.status(statusCode).json({ success: false, error });
 }
@@ -262,6 +274,80 @@ export async function updateParticipantStatusController(req: Request, res: Respo
     sendError(res, 500, {
       code: 'PARTICIPANT_STATUS_UPDATE_ERROR',
       message: 'Unexpected error while updating participant status.',
+      details: error,
+    });
+  }
+}
+
+export async function bulkUpdateParticipantStatusController(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+      sendError(res, 401, {
+        code: 'UNAUTHORIZED',
+        message: 'Active authenticated organization user required.',
+      });
+      return;
+    }
+
+    const parsed = bulkUpdateParticipantStatusValidator.validate(req.body ?? {});
+    if (!parsed.success) {
+      sendError(res, 400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid bulk participant status payload.',
+        details: parsed.error.issues,
+      });
+      return;
+    }
+
+    const eventId = parsed.data.event_id ?? req.params?.eventId ?? req.params?.id;
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'event_id or eventId path parameter is required.',
+      });
+      return;
+    }
+
+    const actor = toActor(req.user);
+    const updates = await Promise.all(
+      parsed.data.participant_ids.map(async (participantId) => {
+        const result = await participantsService.updateParticipantStatus(actor, {
+          event_id: eventId,
+          participant_id: participantId,
+          status: parsed.data.status,
+          notes: parsed.data.notes ?? undefined,
+        });
+
+        return {
+          participant_id: participantId,
+          success: Boolean(result.data && !result.error),
+          data: result.data,
+          error: result.error,
+        };
+      })
+    );
+
+    const updated = updates.filter((entry) => entry.success).map((entry) => entry.data);
+    const failed = updates
+      .filter((entry) => !entry.success)
+      .map((entry) => ({
+        participant_id: entry.participant_id,
+        error: entry.error,
+      }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        updated,
+        failed,
+        updated_count: updated.length,
+        failed_count: failed.length,
+      },
+    });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'BULK_PARTICIPANT_STATUS_UPDATE_ERROR',
+      message: 'Unexpected error while updating participant statuses.',
       details: error,
     });
   }

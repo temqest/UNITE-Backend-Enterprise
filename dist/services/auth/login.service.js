@@ -7,16 +7,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.loginWithEmailPassword = loginWithEmailPassword;
 exports.sendMagicLink = sendMagicLink;
 exports.verifyMagicLink = verifyMagicLink;
-const supabase_js_1 = require("@supabase/supabase-js");
 const auth_types_1 = require("./auth.types");
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
+const supabase_client_1 = require("../../lib/supabase/supabase.client");
 function normalizeEmail(email) {
     return email.trim().toLowerCase();
 }
+function buildDisplayName(userData) {
+    const explicitName = String(userData?.full_name ?? '').trim();
+    if (explicitName.length > 0) {
+        return explicitName;
+    }
+    const derivedName = [userData?.first_name, userData?.last_name]
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    return derivedName || 'User';
+}
 async function resolveOrLinkUserProfile(authUserId, email) {
-    const { data: byAuthId, error: byAuthIdError } = await supabase
+    const { data: byAuthId, error: byAuthIdError } = await supabase_client_1.supabase
         .from('users')
         .select('*')
         .eq('auth_id', authUserId)
@@ -35,7 +44,7 @@ async function resolveOrLinkUserProfile(authUserId, email) {
         return null;
     }
     const normalizedEmail = normalizeEmail(email);
-    const { data: byEmail, error: byEmailError } = await supabase
+    const { data: byEmail, error: byEmailError } = await supabase_client_1.supabase
         .from('users')
         .select('*')
         .ilike('email', normalizedEmail)
@@ -58,7 +67,7 @@ async function resolveOrLinkUserProfile(authUserId, email) {
         };
     }
     const linked = rows[0];
-    const { data: updatedProfile, error: updateError } = await supabase
+    const { data: updatedProfile, error: updateError } = await supabase_client_1.supabase
         .from('users')
         .update({
         auth_id: authUserId,
@@ -82,7 +91,7 @@ async function resolveOrLinkUserProfile(authUserId, email) {
 async function loginWithEmailPassword(input) {
     try {
         // Step 1: Authenticate with Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        const { data: authData, error: authError } = await supabase_client_1.supabase.auth.signInWithPassword({
             email: input.email,
             password: input.password,
         });
@@ -121,9 +130,10 @@ async function loginWithEmailPassword(input) {
         }
         const sessionUser = {
             id: userData.id,
+            auth_id: authData.user.id,
             email: userData.email,
-            full_name: userData.full_name,
-            phone_number: userData.phone_number,
+            full_name: buildDisplayName(userData),
+            phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
             org_id: userData.org_id,
             role: userData.role,
             is_active: userData.is_active,
@@ -136,25 +146,26 @@ async function loginWithEmailPassword(input) {
         // Step 4: Fetch organization info if user belongs to an org
         let organization;
         if (userData.org_id) {
-            const { data: orgData, error: orgError } = await supabase
+            const { data: orgData, error: orgError } = await supabase_client_1.supabase
                 .from('organizations')
                 .select('*')
                 .eq('id', userData.org_id)
                 .single();
             if (orgData) {
+                const org = orgData;
                 // Check if organization is active
-                if (!orgData.is_active) {
+                if (!org.is_active) {
                     throw {
                         code: auth_types_1.AuthErrorCode.INACTIVE_ORG,
                         message: 'Your organization is currently inactive',
-                        details: { orgId: orgData.id },
+                        details: { orgId: org.id },
                     };
                 }
                 organization = {
-                    id: orgData.id,
-                    name: orgData.name,
-                    is_active: orgData.is_active,
-                    settings: orgData.settings,
+                    id: org.id,
+                    name: org.name,
+                    is_active: org.is_active,
+                    settings: org.settings,
                 };
             }
         }
@@ -184,7 +195,7 @@ async function loginWithEmailPassword(input) {
  */
 async function sendMagicLink(input) {
     try {
-        const { error } = await supabase.auth.signInWithOtp({
+        const { error } = await supabase_client_1.supabase.auth.signInWithOtp({
             email: input.email,
             options: {
                 emailRedirectTo: input.redirectTo || `${process.env.APP_URL}/auth/callback`,
@@ -215,7 +226,7 @@ async function sendMagicLink(input) {
 async function verifyMagicLink(email, token) {
     try {
         // Step 1: Verify the OTP token
-        const { data: authData, error: authError } = await supabase.auth.verifyOtp({
+        const { data: authData, error: authError } = await supabase_client_1.supabase.auth.verifyOtp({
             email,
             token,
             type: 'email',
@@ -245,9 +256,10 @@ async function verifyMagicLink(email, token) {
         }
         const sessionUser = {
             id: userData.id,
+            auth_id: authData.user.id,
             email: userData.email,
-            full_name: userData.full_name,
-            phone_number: userData.phone_number,
+            full_name: buildDisplayName(userData),
+            phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
             org_id: userData.org_id,
             role: userData.role,
             is_active: userData.is_active,
@@ -260,24 +272,25 @@ async function verifyMagicLink(email, token) {
         // Step 4: Fetch organization info
         let organization;
         if (userData.org_id) {
-            const { data: orgData } = await supabase
+            const { data: orgData } = await supabase_client_1.supabase
                 .from('organizations')
                 .select('*')
                 .eq('id', userData.org_id)
                 .single();
             if (orgData) {
-                if (!orgData.is_active) {
+                const org = orgData;
+                if (!org.is_active) {
                     throw {
                         code: auth_types_1.AuthErrorCode.INACTIVE_ORG,
                         message: 'Your organization is currently inactive',
-                        details: { orgId: orgData.id },
+                        details: { orgId: org.id },
                     };
                 }
                 organization = {
-                    id: orgData.id,
-                    name: orgData.name,
-                    is_active: orgData.is_active,
-                    settings: orgData.settings,
+                    id: org.id,
+                    name: org.name,
+                    is_active: org.is_active,
+                    settings: org.settings,
                 };
             }
         }

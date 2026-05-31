@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { EventService } from '../../../../services/events/event.service';
 import type { EventActorContext, EventFilter } from '../../../../services/events/event.types';
-import type { EventCreateInput, EventUpdateInput } from '../../../../models/events/types';
+import type { EventCreateInput, EventStatus, EventUpdateInput } from '../../../../models/events/types';
 import { supabaseServer } from '../../../../lib/supabase/supabase.client';
 
 interface UserRole {
@@ -36,6 +36,10 @@ interface ApiError {
 }
 
 const eventService = new EventService(supabaseServer);
+const eventTypeSchema = z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
+const eventStatusSchema = z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
+const eventSetupStatusSchema = z.enum(['needs_details', 'pending_setup', 'complete']);
+const eventCreationMethodSchema = z.enum(['manual', 'plotting_calendar']);
 
 const createEventValidator = {
   validate: (payload: unknown) =>
@@ -43,15 +47,21 @@ const createEventValidator = {
       .object({
         org_id: z.string().uuid().optional(),
         title: z.string().min(3),
-        address: z.string().trim().min(1),
-        type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']),
+        address: z.string().trim().min(1).optional().nullable(),
+        type: eventTypeSchema,
         event_date: z.string().date(),
-        start_time: z.string(),
-        end_time: z.string(),
+        start_time: z.string().optional().nullable(),
+        end_time: z.string().optional().nullable(),
         description: z.string().optional().nullable(),
         image_url: z.string().url().optional().nullable(),
-        extra_data: z.record(z.string(), z.unknown()),
-        status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
+        extra_data: z.record(z.string(), z.unknown()).optional(),
+        status: eventStatusSchema.optional(),
+        setup_status: eventSetupStatusSchema.optional(),
+        setup_completed_at: z.string().datetime().optional().nullable(),
+        creation_method: eventCreationMethodSchema.optional(),
+        plotting_calendar_id: z.string().uuid().optional().nullable(),
+        hosting_organization: z.string().optional().nullable(),
+        visibility: z.enum(['internal', 'public']).optional(),
         requested_by_user_id: z.string().uuid().optional().nullable(),
         is_public: z.boolean().optional(),
       })
@@ -63,15 +73,21 @@ const updateEventValidator = {
     z
       .object({
         title: z.string().min(3).optional(),
-        address: z.string().trim().min(1).optional(),
-        type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']).optional(),
+        address: z.string().trim().min(1).optional().nullable(),
+        type: eventTypeSchema.optional(),
         event_date: z.string().date().optional(),
-        start_time: z.string().optional(),
-        end_time: z.string().optional(),
+        start_time: z.string().optional().nullable(),
+        end_time: z.string().optional().nullable(),
         description: z.string().optional().nullable(),
         image_url: z.string().url().optional().nullable(),
         extra_data: z.record(z.string(), z.unknown()).optional(),
-        status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
+        status: eventStatusSchema.optional(),
+        setup_status: eventSetupStatusSchema.optional(),
+        setup_completed_at: z.string().datetime().optional().nullable(),
+        creation_method: eventCreationMethodSchema.optional(),
+        plotting_calendar_id: z.string().uuid().optional().nullable(),
+        hosting_organization: z.string().optional().nullable(),
+        visibility: z.enum(['internal', 'public']).optional(),
         completed_at: z.string().datetime().optional().nullable(),
         actual_collected_bags: z.number().int().min(0).optional().nullable(),
         actual_donors: z.number().int().min(0).optional().nullable(),
@@ -79,6 +95,16 @@ const updateEventValidator = {
         post_event_notes: z.string().optional().nullable(),
         post_event_attachments: z.array(z.string().url()).optional(),
         is_public: z.boolean().optional(),
+      })
+      .safeParse(payload),
+};
+
+const statusUpdateValidator = {
+  validate: (payload: unknown) =>
+    z
+      .object({
+        status: eventStatusSchema,
+        notes: z.string().optional().nullable(),
       })
       .safeParse(payload),
 };
@@ -113,15 +139,56 @@ function parseStringArray(input: unknown): string[] | undefined {
   return undefined;
 }
 
-export async function createEventController(req: Request, res: Response): Promise<void> {
+function requireAuthedOrgUser(req: Request, res: Response): AuthenticatedUser | null {
+  if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+    sendError(res, 401, {
+      code: 'UNAUTHORIZED',
+      message: 'Active authenticated organization user required.',
+    });
+    return null;
+  }
+
+  return req.user;
+}
+
+function getEventId(req: Request): string | null {
+  return req.params?.eventId ?? req.params?.id ?? null;
+}
+
+export async function quickCreateEventController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
-      sendError(res, 401, {
-        code: 'UNAUTHORIZED',
-        message: 'Active authenticated organization user required.',
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const actor = toActor(user);
+    const result = await eventService.quickCreateEvent(actor, {
+      ...(req.body ?? {}),
+      org_id: typeof req.body?.org_id === 'string' ? req.body.org_id : user.org_id,
+    });
+
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'EVENT_QUICK_CREATE_FAILED',
+        message: result.error?.message ?? 'Failed to quick create event.',
+        details: result.error?.details,
       });
       return;
     }
+
+    res.status(201).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'EVENT_QUICK_CREATE_ERROR',
+      message: 'Unexpected error while quick creating event.',
+      details: error,
+    });
+  }
+}
+
+export async function createEventController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
 
     const validated = createEventValidator.validate(req.body ?? {});
     if (!validated.success) {
@@ -133,11 +200,21 @@ export async function createEventController(req: Request, res: Response): Promis
       return;
     }
 
-    const actor = toActor(req.user);
-    const payload = {
+    if (validated.data.creation_method === 'plotting_calendar') {
+      sendError(res, 400, {
+        code: 'PLOTTING_CALENDAR_ENDPOINT_REQUIRED',
+        message: 'Use /api/v1/plotting-calendars/:id/plot-event to create plotting-calendar events.',
+      });
+      return;
+    }
+
+    const actor = toActor(user);
+    const payload: EventCreateInput = {
       ...validated.data,
-      org_id: validated.data.org_id ?? req.user.org_id,
-    } as unknown as EventCreateInput;
+      org_id: validated.data.org_id ?? user.org_id!,
+      creation_method: 'manual',
+      extra_data: validated.data.extra_data ?? {},
+    };
 
     const result = await eventService.createEvent(actor, payload);
     if (result.error || !result.data) {
@@ -159,46 +236,36 @@ export async function createEventController(req: Request, res: Response): Promis
   }
 }
 
+export async function createManualEventController(req: Request, res: Response): Promise<void> {
+  return createEventController(req, res);
+}
+
 export async function getEventsController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id || req.user.is_active === false) {
-      sendError(res, 401, {
-        code: 'UNAUTHORIZED',
-        message: 'Active authenticated user required.',
-      });
-      return;
-    }
-
-    if (!req.user.org_id) {
-      sendError(res, 403, {
-        code: 'FORBIDDEN_ORG_SCOPE_REQUIRED',
-        message: 'Organization membership is required to list events.',
-      });
-      return;
-    }
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
 
     const query = req.query ?? {};
     const statusQuery = query.statuses ?? query.status;
     const typeQuery = query.types ?? query.type;
 
     const filter: EventFilter = {
-      org_id:
-        typeof query.org_id === 'string' && query.org_id.trim().length > 0
-          ? query.org_id
-          : req.user.org_id,
-      statuses: parseStringArray(statusQuery) as EventFilter['statuses'],
+      org_id: typeof query.org_id === 'string' && query.org_id.trim().length > 0 ? query.org_id : user.org_id,
+      statuses: parseStringArray(statusQuery) as EventStatus[] | undefined,
+      setup_statuses: parseStringArray(query.setup_status ?? query.setup_statuses) as EventFilter['setup_statuses'],
+      creation_methods: parseStringArray(query.creation_method ?? query.creation_methods) as EventFilter['creation_methods'],
       types: parseStringArray(typeQuery) as EventFilter['types'],
       from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
       to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
-      requested_by_user_id:
-        typeof query.requested_by_user_id === 'string' ? query.requested_by_user_id : undefined,
+      requested_by_user_id: typeof query.requested_by_user_id === 'string' ? query.requested_by_user_id : undefined,
       include_public: query.include_public === 'true' || query.include_public === true,
+      hosting_organization: typeof query.hosting_organization === 'string' ? query.hosting_organization : undefined,
       search: typeof query.search === 'string' ? query.search : undefined,
       limit: typeof query.limit === 'string' ? Number(query.limit) : undefined,
       offset: typeof query.offset === 'string' ? Number(query.offset) : undefined,
     };
 
-    const actor = toActor(req.user);
+    const actor = toActor(user);
     const result = await eventService.listEvents(actor, filter);
     if (result.error || !result.data) {
       sendError(res, 400, {
@@ -214,6 +281,119 @@ export async function getEventsController(req: Request, res: Response): Promise<
     sendError(res, 500, {
       code: 'EVENT_LIST_ERROR',
       message: 'Unexpected error while fetching events.',
+      details: error,
+    });
+  }
+}
+
+export async function completeEventDetailsController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const eventId = getEventId(req);
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'eventId path parameter is required.',
+      });
+      return;
+    }
+
+    const actor = toActor(user);
+    const result = await eventService.completeEventDetails(actor, eventId, req.body ?? {});
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'EVENT_COMPLETE_DETAILS_FAILED',
+        message: result.error?.message ?? 'Failed to save event details.',
+        details: result.error?.details,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'EVENT_COMPLETE_DETAILS_ERROR',
+      message: 'Unexpected error while saving event details.',
+      details: error,
+    });
+  }
+}
+
+export async function patchEventStatusController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const eventId = getEventId(req);
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'eventId path parameter is required.',
+      });
+      return;
+    }
+
+    const validated = statusUpdateValidator.validate(req.body ?? {});
+    if (!validated.success) {
+      sendError(res, 400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event status payload.',
+        details: validated.error.issues,
+      });
+      return;
+    }
+
+    const result = await eventService.setEventStatus(toActor(user), eventId, validated.data);
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'EVENT_STATUS_UPDATE_FAILED',
+        message: result.error?.message ?? 'Failed to update event status.',
+        details: result.error?.details,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'EVENT_STATUS_UPDATE_ERROR',
+      message: 'Unexpected error while updating event status.',
+      details: error,
+    });
+  }
+}
+
+export async function publishEventController(req: Request, res: Response): Promise<void> {
+  try {
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
+
+    const eventId = getEventId(req);
+    if (!eventId) {
+      sendError(res, 400, {
+        code: 'EVENT_ID_REQUIRED',
+        message: 'eventId path parameter is required.',
+      });
+      return;
+    }
+
+    const result = await eventService.publishEvent(toActor(user), eventId);
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'EVENT_PUBLISH_FAILED',
+        message: result.error?.message ?? 'Failed to publish event.',
+        details: result.error?.details,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, {
+      code: 'EVENT_PUBLISH_ERROR',
+      message: 'Unexpected error while publishing event.',
       details: error,
     });
   }
@@ -256,15 +436,10 @@ export async function getPublicEventsController(req: Request, res: Response): Pr
 
 export async function updateEventController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
-      sendError(res, 401, {
-        code: 'UNAUTHORIZED',
-        message: 'Active authenticated organization user required.',
-      });
-      return;
-    }
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
 
-    const eventId = req.params?.eventId ?? req.params?.id;
+    const eventId = getEventId(req);
     if (!eventId) {
       sendError(res, 400, {
         code: 'EVENT_ID_REQUIRED',
@@ -283,8 +458,7 @@ export async function updateEventController(req: Request, res: Response): Promis
       return;
     }
 
-    const actor = toActor(req.user);
-    const result = await eventService.updateEvent(actor, eventId, validated.data as EventUpdateInput);
+    const result = await eventService.updateEvent(toActor(user), eventId, validated.data as EventUpdateInput);
     if (result.error || !result.data) {
       sendError(res, 400, {
         code: result.error?.code ?? 'EVENT_UPDATE_FAILED',
@@ -306,15 +480,10 @@ export async function updateEventController(req: Request, res: Response): Promis
 
 export async function deleteEventController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
-      sendError(res, 401, {
-        code: 'UNAUTHORIZED',
-        message: 'Active authenticated organization user required.',
-      });
-      return;
-    }
+    const user = requireAuthedOrgUser(req, res);
+    if (!user) return;
 
-    const eventId = req.params?.eventId ?? req.params?.id;
+    const eventId = getEventId(req);
     if (!eventId) {
       sendError(res, 400, {
         code: 'EVENT_ID_REQUIRED',
@@ -323,8 +492,7 @@ export async function deleteEventController(req: Request, res: Response): Promis
       return;
     }
 
-    const actor = toActor(req.user);
-    const result = await eventService.deleteEvent(actor, eventId);
+    const result = await eventService.deleteEvent(toActor(user), eventId);
     if (result.error) {
       sendError(res, 400, {
         code: result.error.code,
@@ -342,4 +510,15 @@ export async function deleteEventController(req: Request, res: Response): Promis
       details: error,
     });
   }
+}
+
+export async function deprecatedEventWorkflowController(req: Request, res: Response): Promise<void> {
+  void req;
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'EVENT_WORKFLOW_DEPRECATED',
+      message: 'Approve, reject, and reschedule review actions are deprecated. Use complete-details, publish, or status updates instead.',
+    },
+  });
 }

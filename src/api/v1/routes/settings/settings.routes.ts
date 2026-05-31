@@ -7,6 +7,7 @@ import {
 } from '../../controllers/users/settings.controller';
 import { validateSettingsUpdate } from '../../validators/users';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
+import { authorize, requireActiveUser, requireOrgScope } from '../../../../middelware/authorization.middleware';
 import { validateMiddleware } from '../../../../middelware/validate.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
 
@@ -45,10 +46,10 @@ const passthroughValidator = {
 
 const settingsRouter = Router();
 
-settingsRouter.get('/organization', authMiddleware, validateMiddleware(passthroughValidator), asyncHandler(getOrganizationSettingsController as any));
-settingsRouter.patch('/organization', authMiddleware, validateMiddleware(passthroughValidator), asyncHandler(updateOrganizationSettingsController as any));
-settingsRouter.get('/user', authMiddleware, validateMiddleware(passthroughValidator), asyncHandler(getUserSettingsController as any));
-settingsRouter.patch('/user', authMiddleware, validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
+settingsRouter.get('/organization', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.read'), validateMiddleware(passthroughValidator), asyncHandler(getOrganizationSettingsController as any));
+settingsRouter.patch('/organization', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(passthroughValidator), asyncHandler(updateOrganizationSettingsController as any));
+settingsRouter.get('/user', authMiddleware, requireActiveUser, validateMiddleware(passthroughValidator), asyncHandler(getUserSettingsController as any));
+settingsRouter.patch('/user', authMiddleware, requireActiveUser, validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
 
 export { settingsRouter };
 export default settingsRouter;

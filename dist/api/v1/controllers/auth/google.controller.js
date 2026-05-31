@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.exchangeGoogleSessionController = exchangeGoogleSessionController;
 exports.completeGoogleSignupController = completeGoogleSignupController;
 const auth_1 = require("../../../../services/auth");
+const http_session_service_1 = require("../../../../services/auth/http-session.service");
 function sendError(res, statusCode, error) {
     res.status(statusCode).json({ success: false, error });
 }
@@ -25,6 +26,21 @@ async function exchangeGoogleSessionController(req, res) {
             accessToken,
             refreshToken,
         });
+        if (result.status === 'complete' && result.session.refreshToken) {
+            const persistence = await (0, http_session_service_1.tryCreateAppRefreshSession)(result.session.user, result.session.refreshToken, result.session.accessToken, (0, http_session_service_1.getRequestSessionMetadata)(req));
+            if (persistence.ok) {
+                (0, http_session_service_1.setRefreshCookie)(res, result.session.refreshToken);
+            }
+            res.status(200).json({
+                success: true,
+                data: {
+                    ...result,
+                    session: (0, http_session_service_1.stripRefreshToken)(result.session),
+                    ...(persistence.warning ? { refreshWarning: persistence.warning } : {}),
+                },
+            });
+            return;
+        }
         res.status(200).json({ success: true, data: result });
     }
     catch (error) {
@@ -53,10 +69,10 @@ async function completeGoogleSignupController(req, res) {
             });
             return;
         }
-        if (role !== 'admin' && role !== 'staff') {
+        if (role !== 'admin' && role !== 'staff' && role !== 'donor') {
             sendError(res, 400, {
                 code: 'VALIDATION_ERROR',
-                message: "role must be either 'admin' or 'staff'.",
+                message: "role must be 'admin', 'staff', or 'donor'.",
             });
             return;
         }
@@ -70,13 +86,31 @@ async function completeGoogleSignupController(req, res) {
         const session = await (0, auth_1.completeGoogleSignup)({
             accessToken,
             refreshToken,
-            role,
+            role: role,
             firstName,
             lastName,
+            blood_type: typeof body.blood_type === 'string' ? body.blood_type : undefined,
+            phone_number: typeof body.phone_number === 'string' ? body.phone_number : undefined,
+            province: typeof body.province === 'string' ? body.province : undefined,
+            city: typeof body.city === 'string' ? body.city : undefined,
             organization,
             org_code: orgCode,
         });
-        res.status(200).json({ success: true, data: session });
+        if (session.refreshToken) {
+            const persistence = await (0, http_session_service_1.tryCreateAppRefreshSession)(session.user, session.refreshToken, session.accessToken, (0, http_session_service_1.getRequestSessionMetadata)(req));
+            if (persistence.ok) {
+                (0, http_session_service_1.setRefreshCookie)(res, session.refreshToken);
+            }
+            res.status(200).json({
+                success: true,
+                data: {
+                    ...(0, http_session_service_1.stripRefreshToken)(session),
+                    ...(persistence.warning ? { refreshWarning: persistence.warning } : {}),
+                },
+            });
+            return;
+        }
+        res.status(200).json({ success: true, data: (0, http_session_service_1.stripRefreshToken)(session) });
     }
     catch (error) {
         const err = error;

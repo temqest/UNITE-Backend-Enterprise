@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../../../lib/async-handler';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
+import { requireActiveUser } from '../../../../middelware/authorization.middleware';
 import { validateMiddleware } from '../../../../middelware/validate.middleware';
 import {
   createDistrictController,
@@ -66,6 +67,7 @@ const geographicRouter = Router();
 geographicRouter.get(
   '/provinces',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provinceListQuerySchema), 'query'),
   asyncHandler(listProvincesController as any)
 );
@@ -73,6 +75,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/provinces/region/:region',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provincesByRegionParamSchema), 'params'),
   asyncHandler(getProvincesByRegionController as any)
 );
@@ -80,6 +83,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/provinces/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provinceIdParamSchema), 'params'),
   asyncHandler(getProvinceController as any)
 );
@@ -87,6 +91,7 @@ geographicRouter.get(
 geographicRouter.post(
   '/provinces',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provinceCreateSchema)),
   asyncHandler(createProvinceController as any)
 );
@@ -94,6 +99,7 @@ geographicRouter.post(
 geographicRouter.patch(
   '/provinces/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provinceIdParamSchema), 'params'),
   validateMiddleware(schemaValidator(provinceUpdateSchema)),
   asyncHandler(updateProvinceController as any)
@@ -102,6 +108,7 @@ geographicRouter.patch(
 geographicRouter.delete(
   '/provinces/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(provinceIdParamSchema), 'params'),
   asyncHandler(deleteProvinceController as any)
 );
@@ -109,6 +116,7 @@ geographicRouter.delete(
 geographicRouter.get(
   '/districts',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtListQuerySchema), 'query'),
   asyncHandler(listDistrictsController as any)
 );
@@ -116,6 +124,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/districts/province/:provinceId',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtsByProvinceParamSchema), 'params'),
   asyncHandler(getDistrictsByProvinceController as any)
 );
@@ -123,6 +132,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/districts/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtIdParamSchema), 'params'),
   asyncHandler(getDistrictController as any)
 );
@@ -130,6 +140,7 @@ geographicRouter.get(
 geographicRouter.post(
   '/districts',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtCreateSchema)),
   asyncHandler(createDistrictController as any)
 );
@@ -137,6 +148,7 @@ geographicRouter.post(
 geographicRouter.patch(
   '/districts/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtIdParamSchema), 'params'),
   validateMiddleware(schemaValidator(districtUpdateSchema)),
   asyncHandler(updateDistrictController as any)
@@ -145,6 +157,7 @@ geographicRouter.patch(
 geographicRouter.delete(
   '/districts/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(districtIdParamSchema), 'params'),
   asyncHandler(deleteDistrictController as any)
 );
@@ -152,6 +165,7 @@ geographicRouter.delete(
 geographicRouter.get(
   '/municipalities',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalityListQuerySchema), 'query'),
   asyncHandler(listMunicipalitiesController as any)
 );
@@ -159,6 +173,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/municipalities/district/:districtId',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalitiesByDistrictParamSchema), 'params'),
   asyncHandler(getMunicipalitiesByDistrictController as any)
 );
@@ -166,6 +181,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/municipalities/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalityIdParamSchema), 'params'),
   asyncHandler(getMunicipalityController as any)
 );
@@ -173,6 +189,7 @@ geographicRouter.get(
 geographicRouter.post(
   '/municipalities',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalityCreateSchema)),
   asyncHandler(createMunicipalityController as any)
 );
@@ -180,6 +197,7 @@ geographicRouter.post(
 geographicRouter.patch(
   '/municipalities/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalityIdParamSchema), 'params'),
   validateMiddleware(schemaValidator(municipalityUpdateSchema)),
   asyncHandler(updateMunicipalityController as any)
@@ -188,6 +206,7 @@ geographicRouter.patch(
 geographicRouter.delete(
   '/municipalities/:id',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(municipalityIdParamSchema), 'params'),
   asyncHandler(deleteMunicipalityController as any)
 );
@@ -195,6 +214,7 @@ geographicRouter.delete(
 geographicRouter.get(
   '/search',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(locationSearchQuerySchema), 'query'),
   asyncHandler(searchLocationController as any)
 );
@@ -202,6 +222,7 @@ geographicRouter.get(
 geographicRouter.get(
   '/hierarchy',
   authMiddleware,
+  requireActiveUser,
   validateMiddleware(schemaValidator(hierarchyQuerySchema), 'query'),
   asyncHandler(getLocationHierarchyController as any)
 );

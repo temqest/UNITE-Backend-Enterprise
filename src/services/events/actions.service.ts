@@ -1,142 +1,44 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { EventRow } from '../../models/events/types';
-import type { EventActionAvailability, EventActorContext, EventAvailableAction, ServiceResult } from './event.types';
-import {
-  hasPermission,
-  hasRoleAtLeast,
-  isGeoAreaMatch,
-  toServiceError,
-} from './event.types';
-
-function getEventWorkflowScope(extraData: unknown): {
-  geoScope: Record<string, unknown> | null;
-  assignedReviewerUserId: string | null;
-} {
-  const asRecord =
-    extraData && typeof extraData === 'object' && !Array.isArray(extraData)
-      ? (extraData as Record<string, unknown>)
-      : {};
-
-  const geoScopeRaw = asRecord.geo_scope;
-  const geoScope =
-    geoScopeRaw && typeof geoScopeRaw === 'object' && !Array.isArray(geoScopeRaw)
-      ? (geoScopeRaw as Record<string, unknown>)
-      : null;
-
-  const reviewerRaw = asRecord.reviewer_user_id;
-  const assignedReviewerUserId =
-    typeof reviewerRaw === 'string' && reviewerRaw.trim().length > 0
-      ? reviewerRaw.trim()
-      : null;
-
-  return { geoScope, assignedReviewerUserId };
-}
+import type { EventActionAvailability, EventActorContext, ServiceResult } from './event.types';
+import { EventService } from './event.service';
 
 export class EventActionsService {
-  constructor(private readonly supabase: SupabaseClient) {}
+  private readonly eventService: EventService;
 
-  private async getEvent(eventId: string): Promise<ServiceResult<EventRow>> {
-    const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
-
-    if (error || !data) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_NOT_FOUND', 'Event was not found.', error),
-      };
-    }
-
-    return { data: data as EventRow, error: null };
+  constructor(private readonly supabase: SupabaseClient) {
+    this.eventService = new EventService(supabase);
   }
 
   async getAvailableActions(actor: EventActorContext, eventId: string): Promise<ServiceResult<EventActionAvailability>> {
-    const eventResult = await this.getEvent(eventId);
+    const eventResult = await this.eventService.getEventById(eventId, actor);
     if (eventResult.error || !eventResult.data) {
       return { data: null, error: eventResult.error };
     }
 
     const event = eventResult.data;
-    const actions = new Set<EventAvailableAction>();
-
     const sameOrg = event.org_id === actor.org_id;
-    const isRequester = event.requested_by_user_id === actor.id;
-    const isAdminLike = hasRoleAtLeast(actor, 'admin') || hasPermission(actor, 'manage_events');
+    const canEdit = sameOrg && (event.requested_by_user_id === actor.id || actor.role.type === 'admin' || actor.role.type === 'coordinator');
+    const canPublish = sameOrg && (actor.role.type === 'admin' || actor.role.type === 'coordinator');
 
-    if (!sameOrg && !event.is_public) {
-      return {
-        data: {
-          event_id: event.id,
-          status: event.status,
-          actions: [],
-        },
-        error: null,
-      };
+    const actions: EventActionAvailability['actions'] = ['view_private'];
+
+    if (canEdit) {
+      actions.push('edit_event', 'complete_event_setup', 'change_event_status');
     }
 
-    if (sameOrg) {
-      actions.add('view_private');
+    if (canPublish && event.status !== 'published') {
+      actions.push('publish_event');
     }
 
-    const workflowScope = getEventWorkflowScope(event.extra_data);
-    const eventGeoScope = workflowScope.geoScope;
-    const assignedReviewerUserId = workflowScope.assignedReviewerUserId;
-    const scopeMatch = isGeoAreaMatch(eventGeoScope, actor.geographic_area);
-    const canActAsAssignedReviewer = !assignedReviewerUserId || assignedReviewerUserId === actor.id;
-
-    const canRequest =
-      sameOrg &&
-      (isRequester || hasPermission(actor, 'request_event_approval') || hasRoleAtLeast(actor, 'staff'));
-
-    if (canRequest && ['requested', 'rescheduled'].includes(event.status)) {
-      actions.add('request_approval');
-    }
-
-    const canReview =
-      sameOrg &&
-      canActAsAssignedReviewer &&
-      scopeMatch &&
-      (hasPermission(actor, 'approve_events') || hasRoleAtLeast(actor, 'coordinator'));
-
-    const canRequesterReview = sameOrg && isRequester;
-
-    if ((canRequesterReview || canReview) && ['requested', 'pending', 'rescheduled', 'approved'].includes(event.status)) {
-      actions.add('approve_event');
-      actions.add('reject_event');
-      actions.add('reschedule_event');
-    }
-
-    if (sameOrg && (isAdminLike || isRequester || hasPermission(actor, 'edit_events'))) {
-      actions.add('edit_event');
-    }
-
-    if (sameOrg && canActAsAssignedReviewer && event.status === 'approved' && (canReview || isAdminLike)) {
-      actions.add('cancel_published_event');
-      actions.add('reschedule_published_event');
-    }
-
-    if (sameOrg && (hasPermission(actor, 'assign_event_staff') || hasRoleAtLeast(actor, 'coordinator'))) {
-      actions.add('assign_staff');
-      actions.add('remove_staff');
-    }
-
-    if (sameOrg && hasRoleAtLeast(actor, 'staff')) {
-      actions.add('apply_as_staff');
-    }
-
-    if (event.is_public || sameOrg) {
-      actions.add('apply_as_donor');
-    }
-
-    if (sameOrg && (hasPermission(actor, 'manage_event_participants') || hasRoleAtLeast(actor, 'coordinator'))) {
-      actions.add('confirm_participant');
-      actions.add('mark_participated');
-      actions.add('mark_donated');
+    if (canPublish && !['completed', 'cancelled'].includes(event.status)) {
+      actions.push('cancel_event');
     }
 
     return {
       data: {
         event_id: event.id,
         status: event.status,
-        actions: Array.from(actions),
+        actions,
       },
       error: null,
     };

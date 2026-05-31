@@ -137,36 +137,66 @@ server.listen(PORT, () => {
   console.log(`[server] Listening on port ${PORT}`);
 });
 
-const shutdown = (signal) => {
-  if (server.listening) {
-    console.log(`[server] ${signal} received, shutting down gracefully...`);
-    server.close((err) => {
-      if (err) {
-        console.error('[server] Error while shutting down:', err);
-        process.exit(1);
-      }
-      console.log('[server] Shutdown complete.');
-      process.exit(0);
-    });
-    // Force close if not closed after 10s
-    setTimeout(() => {
-      console.warn('[server] Forced shutdown after timeout.');
-      process.exit(1);
-    }, 10000).unref();
-  } else {
-    console.log('[server] server already closed. Exiting now.');
-    process.exit(0);
+let shutdownInProgress = false;
+let forcedShutdownTimer = null;
+
+const shutdown = (reason) => {
+  if (shutdownInProgress) {
+    return;
   }
+
+  shutdownInProgress = true;
+
+  if (!server.listening) {
+    console.log(`[server] ${reason} received, server already closed.`);
+    process.exit(0);
+    return;
+  }
+
+  console.log(`[server] ${reason} received, shutting down gracefully...`);
+
+  if (server.closeAllConnections) {
+    server.closeAllConnections();
+  }
+
+  forcedShutdownTimer = setTimeout(() => {
+    console.warn('[server] Forced shutdown after timeout.');
+    process.exit(1);
+  }, 10000);
+  forcedShutdownTimer.unref();
+
+  server.close((err) => {
+    if (forcedShutdownTimer) {
+      clearTimeout(forcedShutdownTimer);
+      forcedShutdownTimer = null;
+    }
+
+    if (err) {
+      console.error('[server] Error while shutting down:', err);
+      process.exit(1);
+      return;
+    }
+
+    console.log('[server] Shutdown complete.');
+    process.exit(0);
+  });
 };
 
-const handleExit = (signal) => {
-  shutdown(signal || 'EXIT');
+const handleExit = (reason) => {
+  shutdown(reason || 'EXIT');
 };
 
-process.on('SIGINT', () => handleExit('SIGINT'));
-process.on('SIGTERM', () => handleExit('SIGTERM'));
-process.on('SIGBREAK', () => handleExit('SIGBREAK')); // Windows Ctrl+Break
-process.on('SIGHUP', () => handleExit('SIGHUP'));
+process.stdin.resume(); // Keep stdin flowing to detect closures
+process.stdin.once('end', () => handleExit('stdin-end'));
+process.stdin.once('close', () => handleExit('stdin-close'));
+process.stdin.once('error', () => handleExit('stdin-error'));
+
+process.once('SIGINT', () => handleExit('SIGINT'));
+process.once('SIGTERM', () => handleExit('SIGTERM'));
+process.once('SIGBREAK', () => handleExit('SIGBREAK')); // Windows Ctrl+Break
+process.once('SIGHUP', () => handleExit('SIGHUP'));
+process.once('SIGUSR2', () => handleExit('SIGUSR2')); // Nodemon restarts
+process.once('disconnect', () => handleExit('disconnect'));
 process.on('uncaughtException', (err) => {
   console.error('[server] Uncaught exception:', err);
   handleExit('uncaughtException');
@@ -174,12 +204,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[server] Unhandled promise rejection:', reason);
   handleExit('unhandledRejection');
-});
-process.on('exit', () => {
-  if (server.listening) {
-    console.log('[server] Process exit event triggered, closing server.');
-    server.close();
-  }
 });
 
 module.exports = server;

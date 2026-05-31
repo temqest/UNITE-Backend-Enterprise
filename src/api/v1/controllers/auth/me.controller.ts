@@ -1,4 +1,4 @@
-import { resolveUserAuthorization } from '../../../../services/auth/authorization.service';
+import { validateSession } from '../../../../services/auth/session.service';
 
 interface UserRole {
   type?: string;
@@ -14,6 +14,7 @@ interface AuthenticatedUser {
 
 interface Request {
   user?: AuthenticatedUser;
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 interface Response {
@@ -33,7 +34,10 @@ function sendError(res: Response, statusCode: number, error: ApiError): void {
 
 export async function meController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id) {
+    const authHeader = typeof req.headers?.authorization === 'string' ? req.headers.authorization : '';
+    const accessToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+    if (!req.user?.id || !accessToken) {
       sendError(res, 401, {
         code: 'UNAUTHORIZED',
         message: 'Authenticated user required.',
@@ -41,17 +45,25 @@ export async function meController(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const resolved = await resolveUserAuthorization(req.user);
+    const session = await validateSession(accessToken);
+    if (!session.isValid || !session.user) {
+      sendError(res, 401, {
+        code: 'UNAUTHORIZED',
+        message: 'Session is no longer valid.',
+        details: session.reason,
+      });
+      return;
+    }
 
     res.status(200).json({
       success: true,
       data: {
-        id: req.user.id,
-        role: resolved.role,
-        org_id: req.user.org_id ?? null,
-        active: req.user.is_active !== false,
-        resolved_permissions_count: resolved.permissions.length,
-        resolved_permissions: resolved.permissions,
+        user: session.user,
+        organization: session.organization,
+        accessToken,
+        redirectTo: String(session.user.role?.type ?? '').toLowerCase() === 'donor'
+          ? '/donor/dashboard'
+          : '/dashboard',
       },
     });
   } catch (error) {

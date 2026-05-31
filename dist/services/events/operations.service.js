@@ -5,7 +5,7 @@ const zod_1 = require("zod");
 const event_service_1 = require("./event.service");
 const event_types_1 = require("./event.types");
 const FilterSchema = zod_1.z.object({
-    statuses: zod_1.z.array(zod_1.z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'])).optional(),
+    statuses: zod_1.z.array(zod_1.z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'])).optional(),
     types: zod_1.z.array(zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
     from_date: zod_1.z.string().date().optional(),
     to_date: zod_1.z.string().date().optional(),
@@ -159,6 +159,15 @@ class EventOperationsService {
             const parsed = FilterSchema.parse(filter);
             const limit = parsed.limit ?? 50;
             const offset = parsed.offset ?? 0;
+            const isAdminScope = (0, event_types_1.hasRoleAtLeast)(actor, 'admin');
+            let membership = null;
+            if (!isAdminScope) {
+                const membershipResult = await this.getActorEventMembership(actor);
+                if (membershipResult.error || !membershipResult.data) {
+                    return { data: null, error: membershipResult.error };
+                }
+                membership = membershipResult.data;
+            }
             let query = this.supabase
                 .from('events')
                 .select('*')
@@ -177,6 +186,21 @@ class EventOperationsService {
             if (parsed.to_date) {
                 query = query.lte('event_date', parsed.to_date);
             }
+            if (parsed.search) {
+                const search = parsed.search.replace(/[%,()]/g, ' ').trim();
+                if (search.length > 0) {
+                    query = query.or(`title.ilike.%${search}%,address.ilike.%${search}%,description.ilike.%${search}%`);
+                }
+            }
+            if (!isAdminScope) {
+                const membershipIds = Array.from(membership ?? []);
+                const visibility = [`requested_by_user_id.eq.${actor.id}`];
+                if (membershipIds.length > 0) {
+                    visibility.push(`id.in.(${membershipIds.join(',')})`);
+                }
+                query = query.or(visibility.join(','));
+            }
+            query = query.range(offset, offset + limit - 1);
             const { data, error } = await query;
             if (error) {
                 return {
@@ -184,25 +208,7 @@ class EventOperationsService {
                     error: (0, event_types_1.toServiceError)('MY_EVENTS_LIST_FAILED', 'Failed to fetch my events.', error),
                 };
             }
-            const rows = (data ?? []);
-            const isAdminScope = (0, event_types_1.hasRoleAtLeast)(actor, 'admin');
-            let visibleRows = rows;
-            if (!isAdminScope) {
-                const membershipResult = await this.getActorEventMembership(actor);
-                if (membershipResult.error || !membershipResult.data) {
-                    return { data: null, error: membershipResult.error };
-                }
-                const membership = membershipResult.data;
-                visibleRows = rows.filter((row) => row.requested_by_user_id === actor.id || membership.has(row.id));
-            }
-            if (parsed.search) {
-                const q = parsed.search.toLowerCase();
-                visibleRows = visibleRows.filter((row) => {
-                    const searchable = [row.title, row.address, row.description ?? ''].join(' ').toLowerCase();
-                    return searchable.includes(q);
-                });
-            }
-            const paged = visibleRows.slice(offset, offset + limit);
+            const paged = (data ?? []);
             const eventIds = paged.map((event) => event.id);
             const countResult = await this.getCountsByEventId(eventIds);
             if (countResult.error || !countResult.data) {

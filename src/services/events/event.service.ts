@@ -3,14 +3,17 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type {
   EventCreateInput,
   EventRow,
+  EventSetupStatus,
   EventStatus,
   EventUpdateInput,
+  EventVisibility,
 } from '../../models/events/types';
 import type { OrganizationSettingsRow } from '../../models/organization_settings/types';
 import type { UserRow } from '../../models/users/types';
 import type {
   EventActorContext,
   EventFilter,
+  EventStatusUpdateInput,
   EventSubscriptionHandlers,
   PublicEventFilter,
   ServiceResult,
@@ -23,52 +26,71 @@ import {
   isGeoAreaMatch,
   toServiceError,
 } from './event.types';
-import { notificationService } from '../notifications/notification.service';
+import { normalizeGeoAreaKey } from '../../utils/geo';
 
-function getEventWorkflowScope(extraData: unknown): {
-  geoScope: Record<string, unknown> | null;
-} {
-  const asRecord =
-    extraData && typeof extraData === 'object' && !Array.isArray(extraData)
-      ? (extraData as Record<string, unknown>)
-      : {};
-
-  const geoScopeRaw = asRecord.geo_scope;
-  const geoScope =
-    geoScopeRaw && typeof geoScopeRaw === 'object' && !Array.isArray(geoScopeRaw)
-      ? (geoScopeRaw as Record<string, unknown>)
-      : null;
-
-  return { geoScope };
-}
+const eventTypeSchema = z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
+const eventStatusSchema = z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
+const eventSetupStatusSchema = z.enum(['needs_details', 'pending_setup', 'complete']);
+const eventCreationMethodSchema = z.enum(['manual', 'plotting_calendar']);
+const eventVisibilitySchema = z.enum(['internal', 'public']);
 
 const EventCreateSchema = z.object({
   org_id: z.string().uuid(),
   title: z.string().trim().min(3),
-  address: z.string().trim().min(1),
-  type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']),
+  address: z.string().trim().min(1).optional().nullable(),
+  type: eventTypeSchema,
   event_date: z.string().date(),
-  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
-  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
+  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
   description: z.string().trim().optional().nullable(),
   image_url: z.string().url().optional().nullable(),
-  extra_data: z.record(z.string(), z.unknown()),
-  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
+  extra_data: z.record(z.string(), z.unknown()).optional().default({}),
+  status: eventStatusSchema.optional(),
+  setup_status: eventSetupStatusSchema.optional(),
+  setup_completed_at: z.string().datetime().optional().nullable(),
+  creation_method: eventCreationMethodSchema.optional(),
+  plotting_calendar_id: z.string().uuid().optional().nullable(),
+  hosting_organization: z.string().trim().optional().nullable(),
+  visibility: eventVisibilitySchema.optional(),
   requested_by_user_id: z.string().uuid().optional().nullable(),
   is_public: z.boolean().optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
+  created_by: z.string().uuid().optional().nullable(),
+  updated_by: z.string().uuid().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.start_time && value.end_time && value.start_time >= value.end_time) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be later than start_time.',
+    });
+  }
 });
 
 const EventUpdateSchema = z.object({
   title: z.string().trim().min(3).optional(),
-  address: z.string().trim().min(1).optional(),
-  type: z.enum(['blood_drive', 'training', 'advocacy', 'assembly']).optional(),
+  address: z.string().trim().min(1).optional().nullable(),
+  type: eventTypeSchema.optional(),
   event_date: z.string().date().optional(),
-  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional(),
-  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional(),
+  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
   description: z.string().trim().optional().nullable(),
   image_url: z.string().url().optional().nullable(),
   extra_data: z.record(z.string(), z.unknown()).optional(),
-  status: z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed']).optional(),
+  status: eventStatusSchema.optional(),
+  setup_status: eventSetupStatusSchema.optional(),
+  setup_completed_at: z.string().datetime().optional().nullable(),
+  creation_method: eventCreationMethodSchema.optional(),
+  plotting_calendar_id: z.string().uuid().optional().nullable(),
+  hosting_organization: z.string().trim().optional().nullable(),
+  visibility: eventVisibilitySchema.optional(),
   completed_at: z.string().datetime().optional().nullable(),
   actual_collected_bags: z.number().int().min(0).optional().nullable(),
   actual_donors: z.number().int().min(0).optional().nullable(),
@@ -76,16 +98,90 @@ const EventUpdateSchema = z.object({
   post_event_notes: z.string().trim().optional().nullable(),
   post_event_attachments: z.array(z.string().url()).optional(),
   is_public: z.boolean().optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
+  updated_by: z.string().uuid().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.start_time && value.end_time && value.start_time >= value.end_time) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be later than start_time.',
+    });
+  }
+});
+
+const QuickEventCreateSchema = z.object({
+  org_id: z.string().uuid().optional(),
+  title: z.string().trim().min(3),
+  type: eventTypeSchema,
+  event_date: z.string().date(),
+  venue_name: z.string().trim().optional().nullable(),
+  municipality: z.string().trim().optional().nullable(),
+  province: z.string().trim().optional().nullable(),
+  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  hosting_organization: z.string().trim().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.start_time && value.end_time && value.start_time >= value.end_time) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be later than start_time.',
+    });
+  }
+});
+
+const CompleteEventDetailsSchema = z.object({
+  title: z.string().trim().min(3).optional(),
+  type: eventTypeSchema.optional(),
+  event_date: z.string().date().optional(),
+  start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+  description: z.string().trim().optional().nullable(),
+  image_url: z.string().url().optional().nullable(),
+  status_action: z.enum(['draft', 'pending_setup', 'scheduled', 'publish']).optional(),
+  is_public: z.boolean().optional(),
+  visibility: eventVisibilitySchema.optional(),
+  hosting_organization: z.string().trim().optional().nullable(),
+  extra_data: z.record(z.string(), z.unknown()).optional(),
+  assigned_staff_ids: z.array(z.string().uuid()).optional(),
+  coverage_area_id: z.string().uuid().optional().nullable(),
+  coverage_area_psgc_code: z.string().trim().optional().nullable(),
+  coverage_area_boundary_id: z.string().trim().optional().nullable(),
+  coverage_area_name: z.string().trim().optional().nullable(),
+  coverage_area_province: z.string().trim().optional().nullable(),
+  coverage_area_municipality: z.string().trim().optional().nullable(),
+  coverage_area_barangay: z.string().trim().optional().nullable(),
+  coverage_area_normalized_key: z.string().trim().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.start_time && value.end_time && value.start_time >= value.end_time) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be later than start_time.',
+    });
+  }
 });
 
 const EventFilterSchema = z.object({
   org_id: z.string().uuid().optional(),
-  statuses: z.array(z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'])).optional(),
-  types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
+  statuses: z.array(eventStatusSchema).optional(),
+  setup_statuses: z.array(eventSetupStatusSchema).optional(),
+  creation_methods: z.array(eventCreationMethodSchema).optional(),
+  types: z.array(eventTypeSchema).optional(),
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
   requested_by_user_id: z.string().uuid().optional(),
   include_public: z.boolean().optional(),
+  hosting_organization: z.string().trim().optional(),
   search: z.string().trim().optional(),
   limit: z.number().int().min(1).max(500).optional(),
   offset: z.number().int().min(0).optional(),
@@ -94,13 +190,51 @@ const EventFilterSchema = z.object({
 const PublicEventFilterSchema = z.object({
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
-  types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
+  types: z.array(eventTypeSchema).optional(),
   province: z.string().trim().optional(),
   city: z.string().trim().optional(),
   search: z.string().trim().optional(),
   limit: z.number().int().min(1).max(500).optional(),
   offset: z.number().int().min(0).optional(),
 });
+
+const EventStatusUpdateSchema = z.object({
+  event_id: z.string().uuid(),
+  status: eventStatusSchema,
+  notes: z.string().trim().optional().nullable(),
+});
+
+function normalizeExtraData(extraData: unknown): Record<string, unknown> {
+  if (!extraData || typeof extraData !== 'object' || Array.isArray(extraData)) {
+    return {};
+  }
+
+  return { ...(extraData as Record<string, unknown>) };
+}
+
+function getTextValue(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getNumberValue(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function getArrayCount(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  return Array.isArray(value) ? value.length : 0;
+}
 
 function extraValueToString(extraData: unknown, key: string): string {
   if (!extraData || typeof extraData !== 'object' || Array.isArray(extraData)) {
@@ -111,82 +245,47 @@ function extraValueToString(extraData: unknown, key: string): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function allowsDonorSignup(event: Pick<EventRow, 'is_public' | 'extra_data'>): boolean {
-  if (event.is_public) {
-    return true;
-  }
-
-  if (!event.extra_data || typeof event.extra_data !== 'object' || Array.isArray(event.extra_data)) {
-    return false;
-  }
-
-  const allowRaw = (event.extra_data as Record<string, unknown>).allow_donor_signup;
-  return allowRaw === true || allowRaw === 'true';
+function isPublishedVisibility(event: Pick<EventRow, 'status' | 'visibility' | 'is_public' | 'setup_status'>): boolean {
+  return (
+    event.status === 'published' &&
+    event.setup_status === 'complete' &&
+    (event.visibility === 'public' || event.is_public === true)
+  );
 }
 
 export class EventService {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  private async notifyReviewersForEvent(params: {
-    event: EventRow;
-    actor: EventActorContext;
-    notes?: string;
-  }): Promise<void> {
-    const { data: users, error } = await this.supabase
-      .from('users')
-      .select('*')
-      .eq('org_id', params.event.org_id)
-      .eq('is_active', true);
+  private async autoMatchCoverageArea(orgId: string, event: Partial<EventRow>): Promise<string | null> {
+    if (event.coverage_area_id) {
+      return event.coverage_area_id;
+    }
+    if (!event.coverage_area_psgc_code && !event.coverage_area_normalized_key) {
+      return null;
+    }
+    let query = this.supabase.from('organization_coverage_areas').select('id').eq('org_id', orgId);
+    if (event.coverage_area_psgc_code && event.coverage_area_normalized_key) {
+      query = query.or(`psgc_code.eq.${event.coverage_area_psgc_code},normalized_area_key.eq.${event.coverage_area_normalized_key}`);
+    } else if (event.coverage_area_psgc_code) {
+      query = query.eq('psgc_code', event.coverage_area_psgc_code);
+    } else if (event.coverage_area_normalized_key) {
+      query = query.eq('normalized_area_key', event.coverage_area_normalized_key);
+    }
+    const { data } = await query.maybeSingle();
+    return data ? data.id : null;
+  }
 
-    if (error) {
-      return;
+  private async getActorById(userId: string): Promise<ServiceResult<UserRow>> {
+    const { data, error } = await this.supabase.from('users').select('*').eq('id', userId).single();
+
+    if (error || !data) {
+      return {
+        data: null,
+        error: toServiceError('ACTOR_NOT_FOUND', 'Requesting user was not found.', error),
+      };
     }
 
-    const workflowScope = getEventWorkflowScope(params.event.extra_data);
-    const eventGeoScope = workflowScope.geoScope;
-
-    const reviewers = ((users as UserRow[]) ?? []).filter((user) => {
-      if (user.id === params.actor.id) {
-        return false;
-      }
-
-      if (user.role.type === 'super_admin') {
-        return true;
-      }
-
-      const permissions = user.role.permissions ?? [];
-      const hasApprovePermission = permissions.includes('*') || permissions.includes('approve_events');
-      const isCoordinator = user.role.type === 'coordinator' || user.role.type === 'admin';
-
-      if (!hasApprovePermission && !isCoordinator) {
-        return false;
-      }
-
-      return isGeoAreaMatch(eventGeoScope, user.geographic_area);
-    });
-
-    if (reviewers.length === 0) {
-      return;
-    }
-
-    const actorResult = await this.getActorById(params.actor.id);
-    const actorName = actorResult.data
-      ? [actorResult.data.first_name, actorResult.data.last_name].filter(Boolean).join(' ').trim() || 'A requester'
-      : 'A requester';
-
-    await Promise.allSettled(
-      reviewers.map(async (reviewer) => {
-        await notificationService.notifyReviewNeeded({
-          org_id: params.event.org_id,
-          reviewer_user_id: reviewer.id,
-          actor_user_id: params.actor.id,
-          actor_name: actorName,
-          event_id: params.event.id,
-          event_name: params.event.title,
-          notes: params.notes,
-        });
-      })
-    );
+    return { data: data as UserRow, error: null };
   }
 
   private async withRequester(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
@@ -221,7 +320,7 @@ export class EventService {
         id: row.id,
         first_name: first,
         last_name: last,
-        full_name: [first, last].filter(Boolean).join(' ').trim() || 'Unknown requester',
+        full_name: [first, last].filter(Boolean).join(' ').trim() || 'Unknown creator',
       });
     }
 
@@ -234,78 +333,23 @@ export class EventService {
     };
   }
 
-  private async withLatestApproval(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
-    const eventIds = Array.from(new Set(events.map((event) => event.id).filter(Boolean)));
+  private async enrichEvents(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
+    const withRequesterResult = await this.withRequester(events);
 
-    if (eventIds.length === 0) {
-      return { data: events, error: null };
+    if (withRequesterResult.error || !withRequesterResult.data) {
+      return { data: null, error: withRequesterResult.error };
     }
 
-    const { data, error } = await this.supabase
-      .from('event_approvals')
-      .select('event_id, action, acted_by_user_id, to_status, notes, created_at')
-      .in('event_id', eventIds)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_LATEST_APPROVAL_LOOKUP_FAILED', 'Failed to fetch latest approval details.', error),
-      };
-    }
-
-    const latestByEventId = new Map<string, {
-      action: EventRow['latest_approval'] extends infer T
-        ? T extends { action: infer A }
-          ? A
-          : never
-        : never;
-      acted_by_user_id: string | null;
-      to_status: EventStatus;
-      notes: string | null;
-      created_at: string;
-    }>();
-
-    for (const row of (data ?? []) as Array<{
-      event_id: string;
-      action: 'request' | 'accept' | 'reject' | 'reschedule' | 'auto_approve';
-      acted_by_user_id: string | null;
-      to_status: EventStatus;
-      notes: string | null;
-      created_at: string;
-    }>) {
-      if (!latestByEventId.has(row.event_id)) {
-        latestByEventId.set(row.event_id, {
-          action: row.action,
-          acted_by_user_id: row.acted_by_user_id,
-          to_status: row.to_status,
-          notes: row.notes,
-          created_at: row.created_at,
-        });
-      }
-    }
+    const requesterById = new Map(withRequesterResult.data.map((event) => [event.id, event.requested_by ?? null]));
 
     return {
       data: events.map((event) => ({
         ...event,
-        latest_approval: latestByEventId.get(event.id) ?? null,
+        requested_by: requesterById.get(event.id) ?? null,
+        latest_approval: null,
       })),
       error: null,
     };
-  }
-
-  private async enrichEvents(events: EventRow[]): Promise<ServiceResult<EventRow[]>> {
-    const withRequester = await this.withRequester(events);
-    if (withRequester.error || !withRequester.data) {
-      return { data: null, error: withRequester.error };
-    }
-
-    const withLatestApproval = await this.withLatestApproval(withRequester.data);
-    if (withLatestApproval.error || !withLatestApproval.data) {
-      return { data: null, error: withLatestApproval.error };
-    }
-
-    return { data: withLatestApproval.data, error: null };
   }
 
   private async getOrganizationSettings(orgId: string): Promise<ServiceResult<OrganizationSettingsRow | null>> {
@@ -325,87 +369,13 @@ export class EventService {
     return { data: (data as OrganizationSettingsRow | null) ?? null, error: null };
   }
 
-  private async getActorById(userId: string): Promise<ServiceResult<UserRow>> {
-    const { data, error } = await this.supabase.from('users').select('*').eq('id', userId).single();
-
-    if (error || !data) {
-      return {
-        data: null,
-        error: toServiceError('ACTOR_NOT_FOUND', 'Requesting user was not found.', error),
-      };
-    }
-
-    return { data: data as UserRow, error: null };
-  }
-
-  async getEventById(eventId: string, actor?: EventActorContext): Promise<ServiceResult<EventRow>> {
-    const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
-
-    if (error || !data) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_NOT_FOUND', 'Event was not found.', error),
-      };
-    }
-
-    const event = data as EventRow;
-
-    if (!actor) {
-      if (!event.is_public || event.status !== 'approved') {
-        return {
-          data: null,
-          error: toServiceError('EVENT_NOT_VISIBLE', 'Event is not publicly visible.'),
-        };
-      }
-      const enriched = await this.enrichEvents([event]);
-      if (enriched.error || !enriched.data?.[0]) {
-        return { data: null, error: enriched.error };
-      }
-      return { data: enriched.data[0], error: null };
-    }
-
-    const isSameOrg = event.org_id === actor.org_id;
-    const canViewOrgEvents = hasRoleAtLeast(actor, 'staff') || hasPermission(actor, 'view_events');
-
-    if (!isSameOrg && !event.is_public) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_NOT_VISIBLE', 'Event is outside your organization scope.'),
-      };
-    }
-
-    if (isSameOrg && !canViewOrgEvents && event.requested_by_user_id !== actor.id && !event.is_public) {
-      return {
-        data: null,
-        error: toServiceError('PERMISSION_DENIED', 'You do not have permission to view this event.'),
-      };
-    }
-
-    const workflowScope = getEventWorkflowScope(event.extra_data);
-    if (isSameOrg && !isGeoAreaMatch(actor.geographic_area, workflowScope.geoScope)) {
-      if (!hasRoleAtLeast(actor, 'admin')) {
-        return {
-          data: null,
-          error: toServiceError('EVENT_NOT_VISIBLE', 'Event is outside your geographic area.'),
-        };
-      }
-    }
-
-    const enriched = await this.enrichEvents([event]);
-    if (enriched.error || !enriched.data?.[0]) {
-      return { data: null, error: enriched.error };
-    }
-
-    return { data: enriched.data[0], error: null };
-  }
-
   private parseTimeToMinutes(timeValue: string): number {
-    const [h, m] = timeValue.split(':');
-    return Number(h) * 60 + Number(m);
+    const [hours, minutes] = timeValue.split(':');
+    return Number(hours) * 60 + Number(minutes);
   }
 
   private async validateCreationAgainstSettings(
-    payload: Pick<EventCreateInput, 'org_id' | 'event_date' | 'start_time' | 'end_time'>,
+    payload: { org_id: string; event_date: string; start_time: string; end_time: string; exclude_event_id?: string; creation_method?: string },
     settings: OrganizationSettingsRow | null
   ): Promise<ServiceResult<true>> {
     if (!settings) {
@@ -421,7 +391,7 @@ export class EventService {
         data: null,
         error: toServiceError(
           'ADVANCE_DAYS_VIOLATION',
-          `Event must be requested at least ${settings.event_request_advance_days} days in advance.`
+          `Event must be created at least ${settings.event_request_advance_days} days in advance.`
         ),
       };
     }
@@ -435,7 +405,7 @@ export class EventService {
       };
     }
 
-    const bannedDates = new Set((settings.banned_specific_dates ?? []).map((d) => d.trim()));
+    const bannedDates = new Set((settings.banned_specific_dates ?? []).map((value) => value.trim()));
     if (bannedDates.has(payload.event_date)) {
       return {
         data: null,
@@ -450,57 +420,52 @@ export class EventService {
       };
     }
 
-    const { count, error: countError } = await this.supabase
+    const activeStatuses: EventStatus[] = ['plotted', 'needs_details', 'scheduled', 'published', 'ongoing'];
+    const { data: sameDayEvents, error: sameDayError } = await this.supabase
       .from('events')
-      .select('id', { count: 'exact', head: true })
+      .select('id, start_time, end_time')
       .eq('org_id', payload.org_id)
       .eq('event_date', payload.event_date)
-      .in('status', ['requested', 'pending', 'approved', 'rescheduled']);
+      .in('status', activeStatuses);
 
-    if (countError) {
+    if (sameDayError) {
       return {
         data: null,
-        error: toServiceError('EVENT_COUNT_LOOKUP_FAILED', 'Failed to validate daily event limit.', countError),
+        error: toServiceError('EVENT_COUNT_LOOKUP_FAILED', 'Failed to validate organization event limits.', sameDayError),
       };
     }
 
-    const eventCount = count ?? 0;
-    if (eventCount >= settings.max_events_per_day) {
-      return {
-        data: null,
-        error: toServiceError('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
-      };
-    }
+    const filteredSameDayEvents = ((sameDayEvents ?? []) as Array<{ id: string; start_time: string | null; end_time: string | null }>)
+      .filter((event) => event.id !== payload.exclude_event_id);
 
-    if (settings.prevent_double_booking_same_day) {
-      const { data: sameDayEvents, error: sameDayError } = await this.supabase
-        .from('events')
-        .select('id, start_time, end_time')
-        .eq('org_id', payload.org_id)
-        .eq('event_date', payload.event_date)
-        .in('status', ['requested', 'pending', 'approved', 'rescheduled']);
-
-      if (sameDayError) {
+    if (payload.creation_method !== 'plotting_calendar') {
+      if (filteredSameDayEvents.length >= settings.max_events_per_day) {
         return {
           data: null,
-          error: toServiceError('DOUBLE_BOOKING_CHECK_FAILED', 'Failed to validate double booking.', sameDayError),
+          error: toServiceError('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
         };
       }
 
-      const start = this.parseTimeToMinutes(payload.start_time);
-      const end = this.parseTimeToMinutes(payload.end_time);
+      if (settings.prevent_double_booking_same_day) {
+        const start = this.parseTimeToMinutes(payload.start_time);
+        const end = this.parseTimeToMinutes(payload.end_time);
 
-      const hasOverlap = (sameDayEvents ?? []).some((existing) => {
-        const existingStart = this.parseTimeToMinutes(String(existing.start_time));
-        const existingEnd = this.parseTimeToMinutes(String(existing.end_time));
-        return start < existingEnd && end > existingStart;
-      });
+        const hasOverlap = filteredSameDayEvents.some((existing) => {
+          if (!existing.start_time || !existing.end_time) {
+            return false;
+          }
 
-      if (hasOverlap) {
-        return {
-          data: null,
-          error: toServiceError('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
-        };
+          const existingStart = this.parseTimeToMinutes(existing.start_time);
+          const existingEnd = this.parseTimeToMinutes(existing.end_time);
+          return start < existingEnd && end > existingStart;
+        });
+
+        if (hasOverlap) {
+          return {
+            data: null,
+            error: toServiceError('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
+          };
+        }
       }
     }
 
@@ -552,12 +517,275 @@ export class EventService {
     });
   }
 
+  private async getAssignedStaffCount(eventId: string): Promise<ServiceResult<number>> {
+    const { count, error } = await this.supabase
+      .from('event_staff')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId);
+
+    if (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_STAFF_COUNT_FAILED', 'Failed to check event staff assignments.', error),
+      };
+    }
+
+    return { data: count ?? 0, error: null };
+  }
+
+  private async syncAssignedStaff(params: {
+    event: EventRow;
+    actor: EventActorContext;
+    userIds: string[];
+  }): Promise<ServiceResult<true>> {
+    const uniqueIds = Array.from(new Set(params.userIds.filter(Boolean)));
+    const { error: deleteError } = await this.supabase
+      .from('event_staff')
+      .delete()
+      .eq('event_id', params.event.id)
+      .eq('org_id', params.event.org_id);
+
+    if (deleteError) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_STAFF_SYNC_FAILED', 'Failed to clear previous staff assignments.', deleteError),
+      };
+    }
+
+    if (uniqueIds.length === 0) {
+      return { data: true, error: null };
+    }
+
+    const rows = uniqueIds.map((userId, index) => ({
+      org_id: params.event.org_id,
+      event_id: params.event.id,
+      user_id: userId,
+      assignment_role: index === 0 ? 'lead' : 'staff',
+      notes: index === 0 ? 'Assigned during event planning.' : null,
+    }));
+
+    const { error: insertError } = await this.supabase.from('event_staff').insert(rows);
+    if (insertError) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_STAFF_SYNC_FAILED', 'Failed to assign event staff.', insertError),
+      };
+    }
+
+    return { data: true, error: null };
+  }
+
+  private async validatePublishReadiness(event: EventRow): Promise<ServiceResult<true>> {
+    const missing: string[] = [];
+
+    if (!event.title?.trim()) missing.push('Event title');
+    if (!event.type) missing.push('Event type');
+    if (!event.event_date) missing.push('Event date');
+    if (!event.hosting_organization?.trim()) missing.push('Hosting organization');
+    if (!event.coverage_area_boundary_id && !event.coverage_area_municipality) {
+      missing.push('Event Area (City / Municipality)');
+    }
+
+    if (missing.length > 0) {
+      return {
+        data: null,
+        error: toServiceError(
+          'EVENT_SETUP_INCOMPLETE',
+          'Please complete the required fields before publishing.',
+          { missing }
+        ),
+      };
+    }
+
+    return { data: true, error: null };
+  }
+
+  private canViewOrgEvent(actor: EventActorContext, event: EventRow): boolean {
+    const sameOrg = event.org_id === actor.org_id;
+    if (!sameOrg) {
+      return isPublishedVisibility(event);
+    }
+
+    if (hasRoleAtLeast(actor, 'admin') || hasPermission(actor, 'events.read')) {
+      return true;
+    }
+
+    if (event.requested_by_user_id === actor.id) {
+      return true;
+    }
+
+    if (!hasRoleAtLeast(actor, 'staff') && !event.is_public) {
+      return false;
+    }
+
+    const geoScopeRaw = normalizeExtraData(event.extra_data).geo_scope;
+    const geoScope =
+      geoScopeRaw && typeof geoScopeRaw === 'object' && !Array.isArray(geoScopeRaw)
+        ? (geoScopeRaw as Record<string, unknown>)
+        : null;
+
+    return isGeoAreaMatch(actor.geographic_area, geoScope);
+  }
+
+  private canEditEvent(actor: EventActorContext, event: EventRow): boolean {
+    return (
+      event.org_id === actor.org_id &&
+      (
+        event.requested_by_user_id === actor.id ||
+        hasRoleAtLeast(actor, 'coordinator') ||
+        hasPermission(actor, 'events.update')
+      )
+    );
+  }
+
+  private canPublishEvent(actor: EventActorContext): boolean {
+    return (
+      hasRoleAtLeast(actor, 'coordinator') ||
+      hasPermission(actor, 'events.approve') ||
+      (hasPermission(actor, 'events.update') && hasRoleAtLeast(actor, 'admin'))
+    );
+  }
+
+  private canCancelEvent(actor: EventActorContext): boolean {
+    return this.canPublishEvent(actor) || hasPermission(actor, 'events.update');
+  }
+
+  private async validateEventWindow(
+    event: Pick<EventRow, 'org_id' | 'event_date' | 'start_time' | 'end_time' | 'id' | 'creation_method'>
+  ): Promise<ServiceResult<true>> {
+    if (!event.start_time || !event.end_time) {
+      return { data: true, error: null };
+    }
+
+    const settingsResult = await this.getOrganizationSettings(event.org_id);
+    if (settingsResult.error) {
+      return { data: null, error: settingsResult.error };
+    }
+
+    return this.validateCreationAgainstSettings(
+      {
+        org_id: event.org_id,
+        event_date: event.event_date,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        exclude_event_id: event.id,
+        creation_method: event.creation_method,
+      },
+      settingsResult.data
+    );
+  }
+
+  async getEventById(eventId: string, actor?: EventActorContext): Promise<ServiceResult<EventRow>> {
+    const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
+
+    if (error || !data) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_NOT_FOUND', 'Event was not found.', error),
+      };
+    }
+
+    const event = data as EventRow;
+
+    if (!actor) {
+      if (!isPublishedVisibility(event)) {
+        return {
+          data: null,
+          error: toServiceError('EVENT_NOT_VISIBLE', 'Event is not publicly visible.'),
+        };
+      }
+
+      const enriched = await this.enrichEvents([event]);
+      return enriched.error || !enriched.data?.[0]
+        ? { data: null, error: enriched.error }
+        : { data: enriched.data[0], error: null };
+    }
+
+    if (!this.canViewOrgEvent(actor, event)) {
+      return {
+        data: null,
+        error: toServiceError('PERMISSION_DENIED', 'You do not have permission to view this event.'),
+      };
+    }
+
+    const enriched = await this.enrichEvents([event]);
+    return enriched.error || !enriched.data?.[0]
+      ? { data: null, error: enriched.error }
+      : { data: enriched.data[0], error: null };
+  }
+
+  async quickCreateEvent(actor: EventActorContext, input: unknown): Promise<ServiceResult<EventRow>> {
+    try {
+      if (!actor.is_active) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'Inactive users cannot create events.'),
+        };
+      }
+
+      if (!hasPermission(actor, 'events.create') && !hasRoleAtLeast(actor, 'coordinator')) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to create events.'),
+        };
+      }
+
+      const parsed = QuickEventCreateSchema.parse(input);
+      const orgId = parsed.org_id ?? actor.org_id;
+      if (orgId !== actor.org_id) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'You can only create events in your own organization.'),
+        };
+      }
+
+      const extraData: Record<string, unknown> = {
+        quick_setup: true,
+        venue_name: parsed.venue_name ?? null,
+        province: parsed.province ?? null,
+        municipality: parsed.municipality ?? null,
+        location: parsed.venue_name || parsed.municipality || parsed.province || null,
+      };
+
+      return this.createEvent(actor, {
+        org_id: orgId,
+        title: parsed.title,
+        address: parsed.venue_name || parsed.municipality || parsed.province || null,
+        type: parsed.type,
+        event_date: parsed.event_date,
+        start_time: parsed.start_time ?? null,
+        end_time: parsed.end_time ?? null,
+        description: null,
+        extra_data: extraData,
+        status: 'draft',
+        setup_status: 'needs_details',
+        creation_method: 'manual',
+        hosting_organization: parsed.hosting_organization ?? null,
+        requested_by_user_id: actor.id,
+        created_by: actor.id,
+        updated_by: actor.id,
+      });
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_QUICK_CREATE_VALIDATION_ERROR', 'Invalid quick event payload.', error),
+      };
+    }
+  }
+
   async createEvent(actor: EventActorContext, input: EventCreateInput): Promise<ServiceResult<EventRow>> {
     try {
       if (!actor.is_active) {
         return {
           data: null,
           error: toServiceError('PERMISSION_DENIED', 'Inactive users cannot create events.'),
+        };
+      }
+
+      if (!hasPermission(actor, 'events.create') && !hasRoleAtLeast(actor, 'coordinator')) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to create events.'),
         };
       }
 
@@ -569,55 +797,131 @@ export class EventService {
         };
       }
 
-      if (!hasPermission(actor, 'create_events') && !hasRoleAtLeast(actor, 'coordinator')) {
-        return {
-          data: null,
-          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to create events.'),
-        };
+      let status: EventStatus = parsed.status ?? 'draft';
+      let setupStatus: EventSetupStatus = parsed.setup_status ?? (status === 'scheduled' || status === 'published' ? 'complete' : 'needs_details');
+      let visibility: EventVisibility = parsed.visibility ?? (status === 'published' || parsed.is_public ? 'public' : 'internal');
+      let isPublic = parsed.is_public ?? visibility === 'public';
+
+      if (status === 'published') {
+        if (!this.canPublishEvent(actor)) {
+          return {
+            data: null,
+            error: toServiceError('PERMISSION_DENIED', 'You do not have permission to publish events.'),
+          };
+        }
+        setupStatus = 'complete';
+        visibility = 'public';
+        isPublic = true;
+      } else if (status === 'scheduled') {
+        setupStatus = 'complete';
+        visibility = 'internal';
+        isPublic = false;
+      } else if (status === 'plotted' || status === 'needs_details') {
+        setupStatus = 'needs_details';
+        visibility = 'internal';
+        isPublic = false;
       }
 
-      const settingsResult = await this.getOrganizationSettings(parsed.org_id);
-      if (settingsResult.error) {
-        return { data: null, error: settingsResult.error };
+      const eventForValidation: EventRow = {
+        id: '00000000-0000-0000-0000-000000000000',
+        org_id: parsed.org_id,
+        title: parsed.title,
+        address: parsed.address ?? null,
+        type: parsed.type,
+        event_date: parsed.event_date,
+        start_time: parsed.start_time ?? null,
+        end_time: parsed.end_time ?? null,
+        description: parsed.description ?? null,
+        image_url: parsed.image_url ?? null,
+        extra_data: normalizeExtraData(parsed.extra_data),
+        status,
+        setup_status: setupStatus,
+        setup_completed_at: parsed.setup_completed_at ?? null,
+        creation_method: parsed.creation_method ?? 'manual',
+        plotting_calendar_id: parsed.plotting_calendar_id ?? null,
+        hosting_organization: parsed.hosting_organization ?? null,
+        visibility,
+        requested_by_user_id: parsed.requested_by_user_id ?? actor.id,
+        requested_at: new Date().toISOString(),
+        approved_at: null,
+        rejected_at: null,
+        rescheduled_at: null,
+        completed_at: null,
+        actual_collected_bags: null,
+        actual_donors: null,
+        wastage_units: null,
+        post_event_notes: null,
+        post_event_attachments: [],
+        is_public: isPublic,
+        coverage_area_id: parsed.coverage_area_id ?? null,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code ?? null,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id ?? null,
+        coverage_area_name: parsed.coverage_area_name ?? null,
+        coverage_area_province: parsed.coverage_area_province ?? null,
+        coverage_area_municipality: parsed.coverage_area_municipality ?? null,
+        coverage_area_barangay: parsed.coverage_area_barangay ?? null,
+        coverage_area_normalized_key: (parsed.coverage_area_normalized_key ?? normalizeGeoAreaKey({
+          region: null,
+          province: parsed.coverage_area_province,
+          municipality_or_city: parsed.coverage_area_municipality,
+          barangay: parsed.coverage_area_barangay,
+        })) || null,
+        created_by: parsed.created_by ?? actor.id,
+        updated_by: parsed.updated_by ?? actor.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (!eventForValidation.coverage_area_normalized_key) {
+        eventForValidation.coverage_area_normalized_key = null; // Enforce null if empty string
       }
 
-      const settingsCheck = await this.validateCreationAgainstSettings(parsed, settingsResult.data);
-      if (settingsCheck.error) {
-        return { data: null, error: settingsCheck.error };
+      eventForValidation.coverage_area_id = await this.autoMatchCoverageArea(parsed.org_id, eventForValidation);
+
+      const windowCheck = await this.validateEventWindow(eventForValidation);
+      if (windowCheck.error) {
+        return { data: null, error: windowCheck.error };
       }
 
-      const canAutoApprove = hasRoleAtLeast(actor, 'admin') || hasPermission(actor, 'auto_approve_events');
-      const requestedAutoApprove = parsed.status === 'approved';
-
-      if (requestedAutoApprove && !canAutoApprove) {
-        return {
-          data: null,
-          error: toServiceError('PERMISSION_DENIED', 'Only admin roles can auto-approve events on creation.'),
-        };
+      if (status === 'scheduled' || status === 'published') {
+        const readiness = await this.validatePublishReadiness(eventForValidation);
+        if (readiness.error) {
+          return { data: null, error: readiness.error };
+        }
       }
-
-      const status: EventStatus = requestedAutoApprove
-        ? 'approved'
-        : parsed.status && ['requested', 'pending'].includes(parsed.status)
-          ? parsed.status
-          : 'requested';
 
       const { data, error } = await this.supabase
         .from('events')
         .insert({
           org_id: parsed.org_id,
           title: parsed.title,
-          address: parsed.address,
+          address: parsed.address ?? null,
           type: parsed.type,
           event_date: parsed.event_date,
-          start_time: parsed.start_time,
-          end_time: parsed.end_time,
+          start_time: parsed.start_time ?? null,
+          end_time: parsed.end_time ?? null,
           description: parsed.description ?? null,
           image_url: parsed.image_url ?? null,
-          extra_data: parsed.extra_data,
+          extra_data: normalizeExtraData(parsed.extra_data),
           status,
+          setup_status: setupStatus,
+          setup_completed_at: setupStatus === 'complete' ? (parsed.setup_completed_at ?? new Date().toISOString()) : null,
+          creation_method: parsed.creation_method ?? 'manual',
+          plotting_calendar_id: parsed.plotting_calendar_id ?? null,
+          hosting_organization: parsed.hosting_organization ?? null,
+          visibility,
           requested_by_user_id: parsed.requested_by_user_id ?? actor.id,
-          is_public: parsed.is_public ?? false,
+          is_public: isPublic,
+          coverage_area_id: eventForValidation.coverage_area_id,
+          coverage_area_psgc_code: eventForValidation.coverage_area_psgc_code,
+          coverage_area_boundary_id: eventForValidation.coverage_area_boundary_id,
+          coverage_area_name: eventForValidation.coverage_area_name,
+          coverage_area_province: eventForValidation.coverage_area_province,
+          coverage_area_municipality: eventForValidation.coverage_area_municipality,
+          coverage_area_barangay: eventForValidation.coverage_area_barangay,
+          coverage_area_normalized_key: eventForValidation.coverage_area_normalized_key,
+          created_by: parsed.created_by ?? actor.id,
+          updated_by: parsed.updated_by ?? actor.id,
         })
         .select('*')
         .single();
@@ -631,55 +935,34 @@ export class EventService {
 
       const created = data as EventRow;
 
-      const isAutoApproved = created.status === 'approved';
-
-      await this.supabase.from('event_approvals').insert({
-        org_id: created.org_id,
-        event_id: created.id,
-        acted_by_user_id: actor.id,
-        action: isAutoApproved ? 'auto_approve' : 'request',
-        from_status: null,
-        to_status: created.status,
-        approval_level: isAutoApproved ? actor.role.type : 'requester',
-        geo_scope: actor.geographic_area,
-        notes: isAutoApproved ? 'Event auto-approved during creation.' : 'Event requested for review.',
-      });
-
       await this.createSystemLog({
         org_id: created.org_id,
         user_id: actor.id,
-        action_type: 'event_created',
+        action_type: created.creation_method === 'plotting_calendar' ? 'event_plotted' : 'event_created',
         entity_type: 'event',
         entity_id: created.id,
         payload: {
           status: created.status,
           event_date: created.event_date,
           type: created.type,
+          creation_method: created.creation_method,
         },
         status: created.status,
       });
 
       await this.createNotification({
         org_id: created.org_id,
-        user_id: null,
+        user_id: created.requested_by_user_id,
         actor_user_id: actor.id,
-        type: 'event.created',
-        title: 'New event created',
-        message: `${created.title} was created and is currently ${created.status}.`,
+        type: created.creation_method === 'plotting_calendar' ? 'event.plotted' : 'event.created',
+        title: created.creation_method === 'plotting_calendar' ? 'Event plotted' : 'Event created',
+        message: `${created.title} is now ${created.status.replace(/_/g, ' ')}.`,
         data: {
           event_id: created.id,
           status: created.status,
-          requested_by_user_id: created.requested_by_user_id,
+          creation_method: created.creation_method,
         },
       });
-
-      if (['requested', 'pending'].includes(created.status)) {
-        await this.notifyReviewersForEvent({
-          event: created,
-          actor,
-          notes: 'Event submitted for review.',
-        });
-      }
 
       return { data: created, error: null };
     } catch (error) {
@@ -690,9 +973,199 @@ export class EventService {
     }
   }
 
-  async updateEvent(actor: EventActorContext, eventId: string, input: EventUpdateInput): Promise<ServiceResult<EventRow>> {
+  async completeEventDetails(actor: EventActorContext, eventId: string, input: unknown): Promise<ServiceResult<EventRow>> {
     try {
-      const parsed = EventUpdateSchema.parse(input);
+      const parsed = CompleteEventDetailsSchema.parse(input);
+      const existingResult = await this.getEventById(eventId, actor);
+      if (existingResult.error || !existingResult.data) {
+        return { data: null, error: existingResult.error };
+      }
+
+      const existing = existingResult.data;
+      if (!this.canEditEvent(actor, existing)) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to complete this event setup.'),
+        };
+      }
+
+      const extraData = {
+        ...normalizeExtraData(existing.extra_data),
+        ...(parsed.extra_data ?? {}),
+      };
+
+      const action = parsed.status_action ?? 'pending_setup';
+      let status: EventStatus = existing.status;
+      let setupStatus: EventSetupStatus = existing.setup_status;
+      let visibility: EventVisibility = parsed.visibility ?? existing.visibility;
+      let isPublic = parsed.is_public ?? existing.is_public;
+
+      if (action === 'draft') {
+        status = existing.creation_method === 'plotting_calendar' ? 'plotted' : 'draft';
+        setupStatus = 'needs_details';
+        visibility = 'internal';
+        isPublic = false;
+      } else if (action === 'pending_setup') {
+        status = 'needs_details';
+        setupStatus = 'pending_setup';
+        visibility = 'internal';
+        isPublic = false;
+      } else if (action === 'scheduled') {
+        status = 'scheduled';
+        setupStatus = 'complete';
+        visibility = 'internal';
+        isPublic = false;
+      } else if (action === 'publish') {
+        if (!this.canPublishEvent(actor)) {
+          return {
+            data: null,
+            error: toServiceError('PERMISSION_DENIED', 'You do not have permission to publish events.'),
+          };
+        }
+        status = 'published';
+        setupStatus = 'complete';
+        visibility = 'public';
+        isPublic = true;
+        extraData.public_registration_enabled = true;
+        extraData.allow_donor_signup = true;
+      }
+
+      const patch: EventUpdateInput = {
+        title: parsed.title ?? existing.title,
+        type: parsed.type ?? existing.type,
+        event_date: parsed.event_date ?? existing.event_date,
+        start_time: parsed.start_time !== undefined ? parsed.start_time : existing.start_time,
+        end_time: parsed.end_time !== undefined ? parsed.end_time : existing.end_time,
+        address: parsed.address !== undefined ? parsed.address : existing.address,
+        description: parsed.description !== undefined ? parsed.description : existing.description,
+        image_url: parsed.image_url !== undefined ? parsed.image_url : existing.image_url,
+        coverage_area_id: parsed.coverage_area_id !== undefined ? parsed.coverage_area_id : existing.coverage_area_id,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code !== undefined ? parsed.coverage_area_psgc_code : existing.coverage_area_psgc_code,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id !== undefined ? parsed.coverage_area_boundary_id : existing.coverage_area_boundary_id,
+        coverage_area_name: parsed.coverage_area_name !== undefined ? parsed.coverage_area_name : existing.coverage_area_name,
+        coverage_area_province: parsed.coverage_area_province !== undefined ? parsed.coverage_area_province : existing.coverage_area_province,
+        coverage_area_municipality: parsed.coverage_area_municipality !== undefined ? parsed.coverage_area_municipality : existing.coverage_area_municipality,
+        coverage_area_barangay: parsed.coverage_area_barangay !== undefined ? parsed.coverage_area_barangay : existing.coverage_area_barangay,
+        coverage_area_normalized_key: parsed.coverage_area_normalized_key !== undefined ? parsed.coverage_area_normalized_key : existing.coverage_area_normalized_key,
+        extra_data: extraData,
+        setup_status: setupStatus,
+        setup_completed_at: setupStatus === 'complete' ? (existing.setup_completed_at ?? new Date().toISOString()) : null,
+        status,
+        visibility,
+        is_public: isPublic,
+        hosting_organization: parsed.hosting_organization !== undefined ? parsed.hosting_organization : existing.hosting_organization,
+        updated_by: actor.id,
+      };
+
+      const candidate: EventRow = {
+        ...existing,
+        ...patch,
+        extra_data: patch.extra_data ?? existing.extra_data,
+        status: patch.status ?? existing.status,
+        setup_status: patch.setup_status ?? existing.setup_status,
+        setup_completed_at: patch.setup_completed_at ?? existing.setup_completed_at,
+        visibility: patch.visibility ?? existing.visibility,
+        is_public: patch.is_public ?? existing.is_public,
+        hosting_organization: patch.hosting_organization ?? existing.hosting_organization,
+      };
+
+      candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
+      patch.coverage_area_id = candidate.coverage_area_id;
+
+      if (!canTransitionEventStatus(existing.status, candidate.status)) {
+        return {
+          data: null,
+          error: toServiceError('INVALID_STATUS_TRANSITION', `Invalid status transition: ${existing.status} -> ${candidate.status}.`),
+        };
+      }
+
+      const windowCheck = await this.validateEventWindow(candidate);
+      if (windowCheck.error) {
+        return { data: null, error: windowCheck.error };
+      }
+
+      if (candidate.status === 'scheduled' || candidate.status === 'published') {
+        const readiness = await this.validatePublishReadiness(candidate);
+        if (readiness.error) {
+          return { data: null, error: readiness.error };
+        }
+      }
+
+      const { data, error } = await this.supabase
+        .from('events')
+        .update(patch)
+        .eq('id', eventId)
+        .eq('org_id', actor.org_id)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return {
+          data: null,
+          error: toServiceError('EVENT_COMPLETE_DETAILS_FAILED', 'Failed to save event setup details.', error),
+        };
+      }
+
+      const updated = data as EventRow;
+
+      if (parsed.assigned_staff_ids) {
+        const staffSync = await this.syncAssignedStaff({
+          event: updated,
+          actor,
+          userIds: parsed.assigned_staff_ids,
+        });
+
+        if (staffSync.error) {
+          return { data: null, error: staffSync.error };
+        }
+      }
+
+      await this.createSystemLog({
+        org_id: updated.org_id,
+        user_id: actor.id,
+        action_type: updated.status === 'published' ? 'event_published' : 'event_details_completed',
+        entity_type: 'event',
+        entity_id: updated.id,
+        payload: {
+          before_setup_status: existing.setup_status,
+          after_setup_status: updated.setup_status,
+          before_status: existing.status,
+          after_status: updated.status,
+          action,
+        },
+        status: updated.status,
+      });
+
+      await this.createNotification({
+        org_id: updated.org_id,
+        user_id: updated.requested_by_user_id,
+        actor_user_id: actor.id,
+        type: updated.status === 'published' ? 'event.published' : 'event.setup_updated',
+        title: updated.status === 'published' ? 'Event published' : 'Event details updated',
+        message: `${updated.title} is now ${updated.status.replace(/_/g, ' ')}.`,
+        data: {
+          event_id: updated.id,
+          status: updated.status,
+          setup_status: updated.setup_status,
+        },
+      });
+
+      return { data: updated, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_COMPLETE_DETAILS_VALIDATION_ERROR', 'Invalid complete details payload.', error),
+      };
+    }
+  }
+
+  async setEventStatus(
+    actor: EventActorContext,
+    eventId: string,
+    input: Omit<EventStatusUpdateInput, 'event_id'>
+  ): Promise<ServiceResult<EventRow>> {
+    try {
+      const parsed = EventStatusUpdateSchema.parse({ event_id: eventId, ...input });
       const existingResult = await this.getEventById(eventId, actor);
       if (existingResult.error || !existingResult.data) {
         return { data: null, error: existingResult.error };
@@ -706,29 +1179,207 @@ export class EventService {
         };
       }
 
-      const canEdit =
-        hasPermission(actor, 'manage_events') ||
-        hasPermission(actor, 'edit_events') ||
-        hasRoleAtLeast(actor, 'coordinator') ||
-        existing.requested_by_user_id === actor.id;
-
-      if (!canEdit) {
+      if (!this.canEditEvent(actor, existing)) {
         return {
           data: null,
-          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to update this event.'),
+          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to update this event status.'),
         };
       }
 
-      if (parsed.status && !canTransitionEventStatus(existing.status, parsed.status)) {
+      if (!canTransitionEventStatus(existing.status, parsed.status)) {
         return {
           data: null,
           error: toServiceError('INVALID_STATUS_TRANSITION', `Invalid status transition: ${existing.status} -> ${parsed.status}.`),
         };
       }
 
+      let setupStatus = existing.setup_status;
+      let visibility = existing.visibility;
+      let isPublic = existing.is_public;
+
+      if (parsed.status === 'scheduled') {
+        setupStatus = 'complete';
+        visibility = 'internal';
+        isPublic = false;
+      } else if (parsed.status === 'published') {
+        if (!this.canPublishEvent(actor)) {
+          return {
+            data: null,
+            error: toServiceError('PERMISSION_DENIED', 'You do not have permission to publish events.'),
+          };
+        }
+        setupStatus = 'complete';
+        visibility = 'public';
+        isPublic = true;
+      } else if (parsed.status === 'cancelled') {
+        if (!this.canCancelEvent(actor)) {
+          return {
+            data: null,
+            error: toServiceError('PERMISSION_DENIED', 'You do not have permission to cancel events.'),
+          };
+        }
+      }
+
+      const candidate: EventRow = {
+        ...existing,
+        status: parsed.status,
+        setup_status: setupStatus,
+        visibility,
+        is_public: isPublic,
+      };
+
+      if (parsed.status === 'scheduled' || parsed.status === 'published') {
+        const readiness = await this.validatePublishReadiness(candidate);
+        if (readiness.error) {
+          return { data: null, error: readiness.error };
+        }
+      }
+
       const { data, error } = await this.supabase
         .from('events')
-        .update(parsed)
+        .update({
+          status: parsed.status,
+          setup_status: setupStatus,
+          visibility,
+          is_public: isPublic,
+          updated_by: actor.id,
+        })
+        .eq('id', eventId)
+        .eq('org_id', actor.org_id)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return {
+          data: null,
+          error: toServiceError('EVENT_STATUS_UPDATE_FAILED', 'Failed to update event status.', error),
+        };
+      }
+
+      const updated = data as EventRow;
+      await this.createSystemLog({
+        org_id: updated.org_id,
+        user_id: actor.id,
+        action_type: 'event_status_updated',
+        entity_type: 'event',
+        entity_id: updated.id,
+        payload: {
+          before_status: existing.status,
+          after_status: updated.status,
+          notes: parsed.notes ?? null,
+        },
+        status: updated.status,
+        notes: parsed.notes ?? undefined,
+      });
+
+      await this.createNotification({
+        org_id: updated.org_id,
+        user_id: updated.requested_by_user_id,
+        actor_user_id: actor.id,
+        type: 'event.status_updated',
+        title: 'Event status updated',
+        message: `${updated.title} changed from ${existing.status} to ${updated.status}.`,
+        data: {
+          event_id: updated.id,
+          from_status: existing.status,
+          to_status: updated.status,
+        },
+      });
+
+      return { data: updated, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('EVENT_STATUS_UPDATE_VALIDATION_ERROR', 'Invalid event status payload.', error),
+      };
+    }
+  }
+
+  async publishEvent(actor: EventActorContext, eventId: string): Promise<ServiceResult<EventRow>> {
+    return this.setEventStatus(actor, eventId, { status: 'published' });
+  }
+
+  async updateEvent(actor: EventActorContext, eventId: string, input: EventUpdateInput): Promise<ServiceResult<EventRow>> {
+    try {
+      const parsed = EventUpdateSchema.parse(input);
+      const existingResult = await this.getEventById(eventId, actor);
+      if (existingResult.error || !existingResult.data) {
+        return { data: null, error: existingResult.error };
+      }
+
+      const existing = existingResult.data;
+      if (!this.canEditEvent(actor, existing)) {
+        return {
+          data: null,
+          error: toServiceError('PERMISSION_DENIED', 'You do not have permission to update this event.'),
+        };
+      }
+
+      const mergedExtraData = parsed.extra_data
+        ? { ...normalizeExtraData(existing.extra_data), ...normalizeExtraData(parsed.extra_data) }
+        : existing.extra_data;
+
+      const nextStatus = parsed.status ?? existing.status;
+      if (!canTransitionEventStatus(existing.status, nextStatus)) {
+        return {
+          data: null,
+          error: toServiceError('INVALID_STATUS_TRANSITION', `Invalid status transition: ${existing.status} -> ${nextStatus}.`),
+        };
+      }
+
+      const candidate: EventRow = {
+        ...existing,
+        ...parsed,
+        status: nextStatus,
+        extra_data: mergedExtraData,
+        visibility: parsed.visibility ?? existing.visibility,
+        is_public: parsed.is_public ?? existing.is_public,
+        coverage_area_id: parsed.coverage_area_id !== undefined ? parsed.coverage_area_id : existing.coverage_area_id,
+        coverage_area_psgc_code: parsed.coverage_area_psgc_code !== undefined ? parsed.coverage_area_psgc_code : existing.coverage_area_psgc_code,
+        coverage_area_boundary_id: parsed.coverage_area_boundary_id !== undefined ? parsed.coverage_area_boundary_id : existing.coverage_area_boundary_id,
+        coverage_area_name: parsed.coverage_area_name !== undefined ? parsed.coverage_area_name : existing.coverage_area_name,
+        coverage_area_province: parsed.coverage_area_province !== undefined ? parsed.coverage_area_province : existing.coverage_area_province,
+        coverage_area_municipality: parsed.coverage_area_municipality !== undefined ? parsed.coverage_area_municipality : existing.coverage_area_municipality,
+        coverage_area_barangay: parsed.coverage_area_barangay !== undefined ? parsed.coverage_area_barangay : existing.coverage_area_barangay,
+        coverage_area_normalized_key: parsed.coverage_area_normalized_key !== undefined ? parsed.coverage_area_normalized_key : existing.coverage_area_normalized_key,
+      };
+
+      if (parsed.coverage_area_province !== undefined || parsed.coverage_area_municipality !== undefined || parsed.coverage_area_barangay !== undefined) {
+        if (!candidate.coverage_area_normalized_key) {
+           candidate.coverage_area_normalized_key = normalizeGeoAreaKey({
+             region: null,
+             province: candidate.coverage_area_province,
+             municipality_or_city: candidate.coverage_area_municipality,
+             barangay: candidate.coverage_area_barangay,
+           }) || null;
+           parsed.coverage_area_normalized_key = candidate.coverage_area_normalized_key;
+        }
+      }
+
+      candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
+      parsed.coverage_area_id = candidate.coverage_area_id;
+
+      const windowCheck = await this.validateEventWindow(candidate);
+      if (windowCheck.error) {
+        return { data: null, error: windowCheck.error };
+      }
+
+      if (candidate.status === 'scheduled' || candidate.status === 'published') {
+        const readiness = await this.validatePublishReadiness(candidate);
+        if (readiness.error) {
+          return { data: null, error: readiness.error };
+        }
+      }
+
+      const patch: EventUpdateInput = {
+        ...parsed,
+        extra_data: mergedExtraData,
+        updated_by: actor.id,
+      };
+
+      const { data, error } = await this.supabase
+        .from('events')
+        .update(patch)
         .eq('id', eventId)
         .eq('org_id', actor.org_id)
         .select('*')
@@ -755,30 +1406,6 @@ export class EventService {
         status: updated.status,
       });
 
-      if (existing.status !== updated.status) {
-        await this.createNotification({
-          org_id: updated.org_id,
-          user_id: updated.requested_by_user_id,
-          actor_user_id: actor.id,
-          type: 'event.status_changed',
-          title: 'Event status updated',
-          message: `${updated.title} changed from ${existing.status} to ${updated.status}.`,
-          data: {
-            event_id: updated.id,
-            from_status: existing.status,
-            to_status: updated.status,
-          },
-        });
-
-        if (updated.status === 'pending') {
-          await this.notifyReviewersForEvent({
-            event: updated,
-            actor,
-            notes: 'Event requires review.',
-          });
-        }
-      }
-
       return { data: updated, error: null };
     } catch (error) {
       return {
@@ -803,9 +1430,9 @@ export class EventService {
     }
 
     const canDelete =
-      hasPermission(actor, 'manage_events') ||
-      hasPermission(actor, 'edit_events') ||
-      hasRoleAtLeast(actor, 'admin');
+      hasRoleAtLeast(actor, 'admin') ||
+      hasPermission(actor, 'events.delete') ||
+      hasPermission(actor, 'events.update');
 
     if (!canDelete) {
       return {
@@ -814,10 +1441,10 @@ export class EventService {
       };
     }
 
-    if (!['requested', 'rejected'].includes(existing.status)) {
+    if (!['draft', 'plotted', 'needs_details', 'cancelled'].includes(existing.status)) {
       return {
         data: null,
-        error: toServiceError('INVALID_STATUS_TRANSITION', 'Only requested or rejected events can be deleted.'),
+        error: toServiceError('INVALID_STATUS_TRANSITION', 'Only draft, plotted, needs details, or cancelled events can be deleted.'),
       };
     }
 
@@ -851,35 +1478,6 @@ export class EventService {
     return { data: null, error: null };
   }
 
-  private isEventVisibleToActor(event: EventRow, actor: EventActorContext): boolean {
-    if (event.org_id !== actor.org_id) {
-      return event.is_public;
-    }
-
-    if (hasRoleAtLeast(actor, 'admin') || hasPermission(actor, 'manage_events')) {
-      return true;
-    }
-
-    const hasViewPermission =
-      hasRoleAtLeast(actor, 'staff') ||
-      hasPermission(actor, 'view_events') ||
-      hasPermission(actor, 'events.read');
-    const hasReviewPermission =
-      hasPermission(actor, 'approve_events') ||
-      hasPermission(actor, 'events.approve');
-    const isRequester = event.requested_by_user_id === actor.id;
-    const hasEventScopePermission = hasViewPermission || hasReviewPermission || isRequester;
-
-    if (!hasEventScopePermission && !event.is_public) {
-      return false;
-    }
-
-    const workflowScope = getEventWorkflowScope(event.extra_data);
-    const eventGeoScope = workflowScope.geoScope;
-
-    return isGeoAreaMatch(eventGeoScope, actor.geographic_area);
-  }
-
   async listEvents(actor: EventActorContext, filter: EventFilter = {}): Promise<ServiceResult<EventRow[]>> {
     try {
       const parsed = EventFilterSchema.parse(filter);
@@ -893,17 +1491,21 @@ export class EventService {
         .order('start_time', { ascending: true })
         .range(offset, offset + limit - 1);
 
-      if (parsed.org_id) {
-        query = query.eq('org_id', parsed.org_id);
-      } else {
-        query = query.eq('org_id', actor.org_id);
-      }
+      query = parsed.org_id ? query.eq('org_id', parsed.org_id) : query.eq('org_id', actor.org_id);
 
-      if (parsed.statuses && parsed.statuses.length > 0) {
+      if (parsed.statuses?.length) {
         query = query.in('status', parsed.statuses);
       }
 
-      if (parsed.types && parsed.types.length > 0) {
+      if (parsed.setup_statuses?.length) {
+        query = query.in('setup_status', parsed.setup_statuses);
+      }
+
+      if (parsed.creation_methods?.length) {
+        query = query.in('creation_method', parsed.creation_methods);
+      }
+
+      if (parsed.types?.length) {
         query = query.in('type', parsed.types);
       }
 
@@ -919,6 +1521,10 @@ export class EventService {
         query = query.eq('requested_by_user_id', parsed.requested_by_user_id);
       }
 
+      if (parsed.hosting_organization) {
+        query = query.ilike('hosting_organization', `%${parsed.hosting_organization}%`);
+      }
+
       const { data, error } = await query;
       if (error) {
         return {
@@ -927,29 +1533,47 @@ export class EventService {
         };
       }
 
-      const rows = (data as EventRow[]) ?? [];
-      const visible = rows.filter((event) => this.isEventVisibleToActor(event, actor));
+      const rows = ((data ?? []) as EventRow[]).filter((event) => this.canViewOrgEvent(actor, event));
+      let result = rows;
 
-      const withPublic = parsed.include_public
-        ? [
-            ...visible,
-            ...rows.filter((event) => event.is_public && event.org_id !== actor.org_id),
-          ]
-        : visible;
+      if (parsed.include_public) {
+        const { data: publicRows, error: publicError } = await this.supabase
+          .from('events')
+          .select('*')
+          .eq('status', 'published')
+          .eq('setup_status', 'complete')
+          .or('visibility.eq.public,is_public.eq.true')
+          .neq('org_id', actor.org_id);
 
-      const uniqueById = new Map<string, EventRow>();
-      for (const event of withPublic) {
-        uniqueById.set(event.id, event);
+        if (publicError) {
+          return {
+            data: null,
+            error: toServiceError('PUBLIC_EVENT_LIST_FAILED', 'Failed to fetch public events.', publicError),
+          };
+        }
+
+        result = [...result, ...((publicRows ?? []) as EventRow[])];
       }
-
-      let result = Array.from(uniqueById.values());
 
       if (parsed.search) {
         const q = parsed.search.toLowerCase();
-        result = result.filter((event) => buildEventSearchText(event).includes(q));
+        result = result.filter((event) => {
+          const extra = normalizeExtraData(event.extra_data);
+          const haystack = [
+            buildEventSearchText(event),
+            event.hosting_organization ?? '',
+            extraValueToString(extra, 'campaign_title'),
+            extraValueToString(extra, 'campaign_description'),
+          ]
+            .join(' ')
+            .toLowerCase();
+
+          return haystack.includes(q);
+        });
       }
 
-      const enriched = await this.enrichEvents(result);
+      const deduped = Array.from(new Map(result.map((event) => [event.id, event])).values());
+      const enriched = await this.enrichEvents(deduped);
       if (enriched.error || !enriched.data) {
         return { data: null, error: enriched.error };
       }
@@ -972,7 +1596,9 @@ export class EventService {
       let query = this.supabase
         .from('events')
         .select('*')
-        .eq('status', 'approved')
+        .eq('status', 'published')
+        .eq('setup_status', 'complete')
+        .or('visibility.eq.public,is_public.eq.true')
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true })
         .range(offset, offset + limit - 1);
@@ -985,7 +1611,7 @@ export class EventService {
         query = query.lte('event_date', parsed.to_date);
       }
 
-      if (parsed.types && parsed.types.length > 0) {
+      if (parsed.types?.length) {
         query = query.in('type', parsed.types);
       }
 
@@ -997,7 +1623,7 @@ export class EventService {
         };
       }
 
-      let rows = ((data as EventRow[]) ?? []).filter((event) => allowsDonorSignup(event));
+      let rows = (data as EventRow[]) ?? [];
 
       if (parsed.province) {
         const province = parsed.province.trim().toLowerCase();
@@ -1007,16 +1633,28 @@ export class EventService {
       if (parsed.city) {
         const city = parsed.city.trim().toLowerCase();
         rows = rows.filter((event) => {
-          const eventCity = extraValueToString(event.extra_data, 'city')
-            || extraValueToString(event.extra_data, 'municipality')
-            || extraValueToString(event.extra_data, 'location');
+          const eventCity =
+            extraValueToString(event.extra_data, 'city') ||
+            extraValueToString(event.extra_data, 'municipality') ||
+            extraValueToString(event.extra_data, 'location');
           return eventCity.toLowerCase() === city;
         });
       }
 
       if (parsed.search) {
         const q = parsed.search.toLowerCase();
-        rows = rows.filter((event) => buildEventSearchText(event).includes(q));
+        rows = rows.filter((event) => {
+          const extra = normalizeExtraData(event.extra_data);
+          const haystack = [
+            buildEventSearchText(event),
+            extraValueToString(extra, 'campaign_title'),
+            extraValueToString(extra, 'campaign_description'),
+            event.hosting_organization ?? '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(q);
+        });
       }
 
       return { data: rows, error: null };
@@ -1028,216 +1666,40 @@ export class EventService {
     }
   }
 
-  private async updatePublishedEventStatus(
-    actor: EventActorContext,
-    eventId: string,
-    params: {
-      targetStatus: Extract<EventStatus, 'pending' | 'rescheduled' | 'rejected'>;
-      actionType: 'event_rescheduled' | 'event_cancelled';
-      eventApprovalAction: 'reschedule' | 'reject';
-      notes?: string | null;
-      schedule?: { event_date?: string; start_time?: string; end_time?: string };
-    }
-  ): Promise<ServiceResult<EventRow>> {
-    const eventResult = await this.getEventById(eventId, actor);
-    if (eventResult.error || !eventResult.data) {
-      return { data: null, error: eventResult.error };
-    }
-
-    const event = eventResult.data;
-    if (event.org_id !== actor.org_id) {
-      return {
-        data: null,
-        error: toServiceError('PERMISSION_DENIED', 'Cannot modify an event from another organization.'),
-      };
-    }
-
-    if (event.status !== 'approved') {
-      return {
-        data: null,
-        error: toServiceError('INVALID_STATUS_TRANSITION', 'Only approved events can be canceled or rescheduled.'),
-      };
-    }
-
-    const canManage = hasPermission(actor, 'manage_events') || hasPermission(actor, 'approve_events') || hasRoleAtLeast(actor, 'coordinator');
-    if (!canManage) {
-      return {
-        data: null,
-        error: toServiceError('PERMISSION_DENIED', 'You do not have permission to change published events.'),
-      };
-    }
-
-    const patch: Partial<EventUpdateInput> = {
-      status: params.targetStatus,
-    };
-
-    if (params.schedule?.event_date) {
-      patch.event_date = params.schedule.event_date;
-    }
-    if (params.schedule?.start_time) {
-      patch.start_time = params.schedule.start_time;
-    }
-    if (params.schedule?.end_time) {
-      patch.end_time = params.schedule.end_time;
-    }
-
-    const { data, error } = await this.supabase
-      .from('events')
-      .update(patch)
-      .eq('id', event.id)
-      .eq('org_id', event.org_id)
-      .select('*')
-      .single();
-
-    if (error || !data) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_STATUS_UPDATE_FAILED', 'Failed to update published event status.', error),
-      };
-    }
-
-    const updated = data as EventRow;
-
-    await this.supabase.from('event_approvals').insert({
-      org_id: updated.org_id,
-      event_id: updated.id,
-      acted_by_user_id: actor.id,
-      action: params.eventApprovalAction,
-      from_status: event.status,
-      to_status: updated.status,
-      approval_level: actor.role.type,
-      geo_scope: actor.geographic_area,
-      notes: params.notes ?? null,
-    });
-
-    await this.createSystemLog({
-      org_id: updated.org_id,
-      user_id: actor.id,
-      action_type: params.actionType,
-      entity_type: 'event',
-      entity_id: updated.id,
-      payload: {
-        from_status: event.status,
-        to_status: updated.status,
-        notes: params.notes ?? null,
-        schedule: params.schedule ?? null,
-      },
-      status: updated.status,
-      notes: params.notes ?? undefined,
-    });
-
-    await this.createNotification({
-      org_id: updated.org_id,
-      user_id: updated.requested_by_user_id,
-      actor_user_id: actor.id,
-      type: params.actionType === 'event_cancelled' ? 'event.cancelled' : 'event.rescheduled',
-      title: params.actionType === 'event_cancelled' ? 'Event canceled' : 'Event rescheduled',
-      message:
-        params.actionType === 'event_cancelled'
-          ? `${updated.title} was canceled.`
-          : `${updated.title} was moved for re-review and scheduling updates.`,
-      data: {
-        event_id: updated.id,
-        from_status: event.status,
-        to_status: updated.status,
-      },
-      priority: 'high',
-    });
-
-    return { data: updated, error: null };
-  }
-
   async cancelPublishedEvent(
     actor: EventActorContext,
     eventId: string,
     notes?: string | null
   ): Promise<ServiceResult<EventRow>> {
-    return this.updatePublishedEventStatus(actor, eventId, {
-      targetStatus: 'rejected',
-      actionType: 'event_cancelled',
-      eventApprovalAction: 'reject',
+    return this.setEventStatus(actor, eventId, {
+      status: 'cancelled',
       notes,
     });
   }
 
-  async reschedulePublishedEvent(
-    actor: EventActorContext,
-    eventId: string,
-    input: { event_date: string; start_time: string; end_time: string; notes?: string | null }
-  ): Promise<ServiceResult<EventRow>> {
-    const parsed = z
-      .object({
-        event_date: z.string().date(),
-        start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
-        end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),
-        notes: z.string().trim().optional().nullable(),
-      })
-      .parse(input);
-
-    return this.updatePublishedEventStatus(actor, eventId, {
-      targetStatus: 'rescheduled',
-      actionType: 'event_rescheduled',
-      eventApprovalAction: 'reschedule',
-      notes: parsed.notes,
-      schedule: {
-        event_date: parsed.event_date,
-        start_time: parsed.start_time,
-        end_time: parsed.end_time,
-      },
-    });
-  }
-
   subscribeToEventUpdates(orgId: string, handlers: EventSubscriptionHandlers): RealtimeChannel {
-    const channel = this.supabase
-      .channel(`events:${orgId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'events', filter: `org_id=eq.${orgId}` },
-        (payload) => {
-          if (handlers.onInsert) {
-            handlers.onInsert(payload.new as EventRow);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'events', filter: `org_id=eq.${orgId}` },
-        (payload) => {
-          if (handlers.onUpdate) {
-            handlers.onUpdate(payload.new as EventRow);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'events', filter: `org_id=eq.${orgId}` },
-        (payload) => {
-          if (handlers.onDelete) {
-            handlers.onDelete(payload.old as Pick<EventRow, 'id' | 'org_id'>);
-          }
-        }
-      )
-      .subscribe();
+    const channel = this.supabase.channel(`events:${orgId}`);
 
-    return channel;
-  }
-
-  async buildActorContext(userId: string): Promise<ServiceResult<EventActorContext>> {
-    const actorResult = await this.getActorById(userId);
-    if (actorResult.error || !actorResult.data) {
-      return { data: null, error: actorResult.error };
-    }
-
-    const actor = actorResult.data;
-    return {
-      data: {
-        id: actor.id,
-        org_id: actor.org_id,
-        role: actor.role,
-        geographic_area: actor.geographic_area,
-        is_active: actor.is_active,
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'events',
+        filter: `org_id=eq.${orgId}`,
       },
-      error: null,
-    };
+      (payload) => {
+        if (payload.eventType === 'INSERT' && handlers.onInsert) {
+          handlers.onInsert(payload.new as EventRow);
+        } else if (payload.eventType === 'UPDATE' && handlers.onUpdate) {
+          handlers.onUpdate(payload.new as EventRow);
+        } else if (payload.eventType === 'DELETE' && handlers.onDelete) {
+          handlers.onDelete(payload.old as Pick<EventRow, 'id' | 'org_id'>);
+        }
+      }
+    );
+
+    void channel.subscribe();
+    return channel;
   }
 }

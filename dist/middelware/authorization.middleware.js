@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireActiveUser = requireActiveUser;
 exports.requireOrgScope = requireOrgScope;
+exports.requireRole = requireRole;
 exports.authorize = authorize;
 function sendError(res, statusCode, code, message) {
     res.status(statusCode).json({
@@ -82,6 +83,35 @@ function requireOrgScope(req, res, next) {
     }
     next();
 }
+function requireRole(...allowedRoles) {
+    const allowed = new Set(allowedRoles.map((role) => role.trim().toLowerCase()).filter(Boolean));
+    return (req, res, next) => {
+        if (!req.user?.id) {
+            logDecision(req, {
+                userId: 'anonymous',
+                role: 'unknown',
+                orgId: 'none',
+                decision: 'deny',
+                reasonCode: 'UNAUTHORIZED',
+            });
+            sendError(res, 401, 'UNAUTHORIZED', 'Authenticated user required.');
+            return;
+        }
+        const role = String(req.user.canonical_role ?? req.user.role?.type ?? '').trim().toLowerCase();
+        if (!allowed.has(role)) {
+            logDecision(req, {
+                userId: req.user.id,
+                role: role || 'unknown',
+                orgId: req.user.org_id ?? 'none',
+                decision: 'deny',
+                reasonCode: 'FORBIDDEN_ROLE_REQUIRED',
+            });
+            sendError(res, 403, 'FORBIDDEN', 'You do not have permission to access this resource.');
+            return;
+        }
+        next();
+    };
+}
 function authorize(permission) {
     return async (req, res, next) => {
         if (!req.user?.id) {
@@ -96,7 +126,7 @@ function authorize(permission) {
             return;
         }
         const user = req.user;
-        const authzService = await import('../services/auth/authorization.service.js');
+        const authzService = require('../services/auth/authorization.service');
         const granted = await authzService.hasPermission(user, permission);
         if (!granted) {
             const authz = await authzService.resolveUserAuthorization(user);

@@ -51,7 +51,7 @@ export interface EventStatsResponse {
 }
 
 const FilterSchema = z.object({
-  statuses: z.array(z.enum(['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'])).optional(),
+  statuses: z.array(z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'])).optional(),
   types: z.array(z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
   from_date: z.string().date().optional(),
   to_date: z.string().date().optional(),
@@ -232,6 +232,16 @@ export class EventOperationsService {
       const parsed = FilterSchema.parse(filter);
       const limit = parsed.limit ?? 50;
       const offset = parsed.offset ?? 0;
+      const isAdminScope = hasRoleAtLeast(actor, 'admin');
+      let membership: Set<string> | null = null;
+
+      if (!isAdminScope) {
+        const membershipResult = await this.getActorEventMembership(actor);
+        if (membershipResult.error || !membershipResult.data) {
+          return { data: null, error: membershipResult.error };
+        }
+        membership = membershipResult.data;
+      }
 
       let query = this.supabase
         .from('events')
@@ -256,6 +266,24 @@ export class EventOperationsService {
         query = query.lte('event_date', parsed.to_date);
       }
 
+      if (parsed.search) {
+        const search = parsed.search.replace(/[%,()]/g, ' ').trim();
+        if (search.length > 0) {
+          query = query.or(`title.ilike.%${search}%,address.ilike.%${search}%,description.ilike.%${search}%`);
+        }
+      }
+
+      if (!isAdminScope) {
+        const membershipIds = Array.from(membership ?? []);
+        const visibility = [`requested_by_user_id.eq.${actor.id}`];
+        if (membershipIds.length > 0) {
+          visibility.push(`id.in.(${membershipIds.join(',')})`);
+        }
+        query = query.or(visibility.join(','));
+      }
+
+      query = query.range(offset, offset + limit - 1);
+
       const { data, error } = await query;
       if (error) {
         return {
@@ -264,32 +292,7 @@ export class EventOperationsService {
         };
       }
 
-      const rows = ((data ?? []) as EventRow[]);
-      const isAdminScope = hasRoleAtLeast(actor, 'admin');
-
-      let visibleRows = rows;
-      if (!isAdminScope) {
-        const membershipResult = await this.getActorEventMembership(actor);
-        if (membershipResult.error || !membershipResult.data) {
-          return { data: null, error: membershipResult.error };
-        }
-
-        const membership = membershipResult.data;
-
-        visibleRows = rows.filter((row) =>
-          row.requested_by_user_id === actor.id || membership.has(row.id)
-        );
-      }
-
-      if (parsed.search) {
-        const q = parsed.search.toLowerCase();
-        visibleRows = visibleRows.filter((row) => {
-          const searchable = [row.title, row.address, row.description ?? ''].join(' ').toLowerCase();
-          return searchable.includes(q);
-        });
-      }
-
-      const paged = visibleRows.slice(offset, offset + limit);
+      const paged = ((data ?? []) as EventRow[]);
       const eventIds = paged.map((event) => event.id);
       const countResult = await this.getCountsByEventId(eventIds);
       if (countResult.error || !countResult.data) {

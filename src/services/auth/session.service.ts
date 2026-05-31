@@ -18,6 +18,22 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+type UserProfileRow = {
+  id: string;
+  auth_id?: string | null;
+  email: string;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone_number?: string | null;
+  org_id?: string | null;
+  role: UserRole;
+  is_active: boolean;
+  geographic_area?: GeographicArea | null;
+  created_at: string;
+  updated_at: string;
+};
+
 function createTokenScopedClient(accessToken?: string) {
   if (!accessToken) {
     return supabase;
@@ -37,6 +53,38 @@ function createTokenScopedClient(accessToken?: string) {
   });
 }
 
+function buildDisplayName(userData: UserProfileRow): string {
+  const explicitName = String(userData.full_name ?? '').trim();
+  if (explicitName.length > 0) {
+    return explicitName;
+  }
+
+  const derivedName = [userData.first_name, userData.last_name]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return derivedName || 'User';
+}
+
+function toSessionUser(userData: UserProfileRow, authUserId: string, emailVerified: boolean): SessionUser {
+  return {
+    id: userData.id,
+    auth_id: authUserId,
+    email: userData.email,
+    full_name: buildDisplayName(userData),
+    phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
+    org_id: userData.org_id ?? undefined,
+    role: userData.role as UserRole,
+    is_active: userData.is_active,
+    geographic_area: userData.geographic_area as GeographicArea,
+    email_verified: emailVerified,
+    created_at: userData.created_at,
+    updated_at: userData.updated_at,
+  };
+}
+
 /**
  * Get current authenticated user with full profile and organization
  */
@@ -44,6 +92,8 @@ export async function getCurrentUser(accessToken?: string): Promise<SessionUser 
   try {
     const scopedClient = createTokenScopedClient(accessToken);
 
+    // Supabase validates a custom bearer JWT when it is passed directly to getUser(jwt).
+    // Relying on a client-level Authorization header alone does not create an auth session.
     const { data: { user }, error: sessionError } = accessToken
       ? await scopedClient.auth.getUser(accessToken)
       : await scopedClient.auth.getUser();
@@ -72,20 +122,7 @@ export async function getCurrentUser(accessToken?: string): Promise<SessionUser 
       return null;
     }
 
-    return {
-      id: userData.id,
-      auth_id: user.id,
-      email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
-      org_id: userData.org_id,
-      role: userData.role as UserRole,
-      is_active: userData.is_active,
-      geographic_area: userData.geographic_area as GeographicArea,
-      email_verified: !!user.email_confirmed_at,
-      created_at: userData.created_at,
-      updated_at: userData.updated_at,
-    };
+    return toSessionUser(userData as UserProfileRow, user.id, !!user.email_confirmed_at);
   } catch (error) {
     if ((error as AuthError).code) {
       throw error;
@@ -101,7 +138,7 @@ export async function getUserOrganization(orgId: string): Promise<OrganizationIn
   try {
     const { data: orgData, error: orgError } = await supabase
       .from('organizations')
-      .select('*')
+      .select('id, name, is_active, settings')
       .eq('id', orgId)
       .maybeSingle();
 
@@ -218,20 +255,7 @@ export async function refreshSession(): Promise<{
       } as AuthError;
     }
 
-    const sessionUser: SessionUser = {
-      id: userData.id,
-      auth_id: data.user.id,
-      email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
-      org_id: userData.org_id,
-      role: userData.role as UserRole,
-      is_active: userData.is_active,
-      geographic_area: userData.geographic_area as GeographicArea,
-      email_verified: !!data.user.email_confirmed_at,
-      created_at: userData.created_at,
-      updated_at: userData.updated_at,
-    };
+    const sessionUser = toSessionUser(userData as UserProfileRow, data.user.id, !!data.user.email_confirmed_at);
 
     return {
       accessToken: data.session.access_token,

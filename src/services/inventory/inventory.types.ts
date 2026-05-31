@@ -73,6 +73,31 @@ export interface BloodTypeInventoryDetail {
   history: BloodInventoryTransactionRow[];
 }
 
+export interface InventoryBatchItem {
+  blood_type: BloodType;
+  transaction_type: InventoryTransactionType;
+  direction?: InventoryTransactionDirection;
+  quantity: number;
+  min_threshold?: number;
+  location?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
+}
+
+export interface InventoryBatchTransactionPayload {
+  org_id: string;
+  performed_by_user_id: string;
+  reason?: string;
+  source?: string;
+  items: InventoryBatchItem[];
+}
+
+export interface InventoryBatchTransactionResult {
+  success_count: number;
+  error_count: number;
+  errors: Array<{ index: number; code: string; message: string }>;
+}
+
 export function toInventoryError(code: string, message: string, details?: unknown): InventoryServiceError {
   return { code, message, details };
 }

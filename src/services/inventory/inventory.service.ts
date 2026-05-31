@@ -9,6 +9,8 @@ import type {
   InventoryDashboardFilter,
   InventoryServiceResult,
   RecordInventoryTransactionInput,
+  InventoryBatchTransactionPayload,
+  InventoryBatchTransactionResult,
 } from './inventory.types';
 import { toInventoryError } from './inventory.types';
 
@@ -31,6 +33,28 @@ const RecordTransactionSchema = z.object({
   reference_type: z.string().trim().optional().nullable(),
   reference_id: z.string().uuid().optional().nullable(),
 });
+
+const RecordBatchTransactionSchema = z.object({
+  org_id: z.string().uuid(),
+  performed_by_user_id: z.string().uuid(),
+  reason: z.string().trim().optional(),
+  source: z.string().trim().optional(),
+  items: z.array(
+    z.object({
+      blood_type: z.enum(BLOOD_TYPES),
+      transaction_type: z.enum(['add_stock', 'usage', 'wastage', 'adjustment']),
+      direction: z.enum(['in', 'out']).optional(),
+      quantity: z.number().int().min(1),
+      min_threshold: z.number().int().min(0).optional(),
+      location: z.string().trim().min(1).optional().nullable(),
+      expiry_date: z.string().date().optional().nullable(),
+      notes: z.string().trim().optional().nullable(),
+    })
+  ),
+});
+
+const BASELINE_ROWS_TTL_MS = 10 * 60 * 1000;
+const baselineRowsEnsuredAtByOrg = new Map<string, number>();
 
 function deriveStatus(currentStock: number, minThreshold: number): 'safe' | 'low' | 'critical' {
   if (currentStock <= 0) {
@@ -70,6 +94,11 @@ export class InventoryService {
   constructor(private readonly supabase: SupabaseClient) {}
 
   private async ensureBaselineRows(orgId: string): Promise<void> {
+    const lastEnsuredAt = baselineRowsEnsuredAtByOrg.get(orgId);
+    if (lastEnsuredAt && Date.now() - lastEnsuredAt < BASELINE_ROWS_TTL_MS) {
+      return;
+    }
+
     const inventoryTable = this.supabase.from('blood_inventory') as any;
 
     const { data, error } = await inventoryTable
@@ -97,6 +126,8 @@ export class InventoryService {
     if (missingRows.length > 0) {
       await inventoryTable.insert(missingRows);
     }
+
+    baselineRowsEnsuredAtByOrg.set(orgId, Date.now());
   }
 
   private toCard(bloodType: BloodType, rows: BloodInventoryRow[]): BloodTypeInventoryCard {
@@ -474,6 +505,115 @@ export class InventoryService {
 
     return {
       data: transactionRow as BloodInventoryTransactionRow,
+      error: null,
+    };
+  }
+
+  async recordBatchTransactions(payload: InventoryBatchTransactionPayload): Promise<InventoryServiceResult<InventoryBatchTransactionResult>> {
+    const parsed = RecordBatchTransactionSchema.safeParse(payload);
+    if (!parsed.success) {
+      return {
+        data: null,
+        error: toInventoryError('INVENTORY_BATCH_TRANSACTION_INVALID', 'Invalid inventory batch transaction payload.', parsed.error.issues),
+      };
+    }
+
+    const { items, org_id, performed_by_user_id, reason, source } = parsed.data;
+    const errors: Array<{ index: number; code: string; message: string }> = [];
+    let successCount = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      const transactionPayload = {
+        org_id,
+        performed_by_user_id,
+        blood_type: item.blood_type,
+        transaction_type: item.transaction_type,
+        direction: item.direction,
+        quantity: item.quantity,
+        min_threshold: item.min_threshold,
+        location: item.location,
+        expiry_date: item.expiry_date,
+        notes: item.notes || reason || undefined,
+        reference_type: source || undefined,
+      };
+
+      const result = await this.recordTransaction(transactionPayload);
+      
+      if (result.error) {
+        errors.push({
+          index: i,
+          code: result.error.code,
+          message: result.error.message,
+        });
+      } else {
+        successCount++;
+      }
+    }
+
+    if (successCount === 0 && items.length > 0) {
+      return {
+        data: null,
+        error: toInventoryError('INVENTORY_BATCH_TRANSACTION_FAILED', 'All items in the batch failed to process.', errors),
+      };
+    }
+
+    return {
+      data: {
+        success_count: successCount,
+        error_count: errors.length,
+        errors,
+      },
+      error: null,
+    };
+  }
+
+  async getTransactions(
+    orgId: string,
+    query: { page?: number; limit?: number; date?: string }
+  ): Promise<InventoryServiceResult<{ items: BloodInventoryTransactionRow[]; total: number; page: number; limit: number }>> {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.max(1, Math.min(100, query.limit ?? 10));
+
+    const transactionsTable = this.supabase.from('blood_inventory_transactions') as any;
+
+    let dbQuery = transactionsTable
+      .select('*', { count: 'exact' })
+      .eq('org_id', orgId);
+
+    if (query.date) {
+      const nextDate = new Date(query.date);
+      if (!isNaN(nextDate.getTime())) {
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        const nextDateStr = nextDate.toISOString().slice(0, 10);
+        dbQuery = dbQuery
+          .gte('created_at', `${query.date}T00:00:00.000Z`)
+          .lt('created_at', `${nextDateStr}T00:00:00.000Z`);
+      }
+    }
+
+    const from = (page - 1) * limit;
+    const to = page * limit - 1;
+
+    const { data, error, count } = await dbQuery
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      return {
+        data: null,
+        error: toInventoryError('INVENTORY_TRANSACTIONS_FETCH_FAILED', 'Failed to load inventory transactions.', error),
+      };
+    }
+
+    return {
+      data: {
+        items: (data ?? []) as BloodInventoryTransactionRow[],
+        total: count ?? 0,
+        page,
+        limit,
+      },
       error: null,
     };
   }

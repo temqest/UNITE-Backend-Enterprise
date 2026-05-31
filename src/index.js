@@ -35,6 +35,9 @@ app.use(cors({
 	credentials: true,
 }));
 
+// Trust proxy: required for rate limiting and IP detection behind reverse proxies (Render, Vercel, etc)
+app.set('trust proxy', 1);
+
 app.disable('x-powered-by');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -42,14 +45,24 @@ app.use(express.urlencoded({ extended: true }));
 let v1Router = null;
 
 try {
-	({ v1Router } = require('./api/v1/routes/v1.routes'));
-} catch (buildError) {
-	try {
+	if (process.env.NODE_ENV === 'development') {
 		require('ts-node/register/transpile-only');
 		({ v1Router } = require('./api/v1/routes/v1.routes.ts'));
+	} else {
+		({ v1Router } = require('./api/v1/routes/v1.routes'));
+	}
+} catch (primaryLoadError) {
+	try {
+		if (process.env.NODE_ENV === 'development') {
+			({ v1Router } = require('./api/v1/routes/v1.routes'));
+		} else {
+			require('ts-node/register/transpile-only');
+			({ v1Router } = require('./api/v1/routes/v1.routes.ts'));
+		}
 	} catch (runtimeError) {
-		const message = runtimeError instanceof Error ? runtimeError.message : String(runtimeError);
-		console.warn('[bootstrap] API router was not loaded:', message);
+		const primaryMessage = primaryLoadError instanceof Error ? primaryLoadError.message : String(primaryLoadError);
+		const fallbackMessage = runtimeError instanceof Error ? runtimeError.message : String(runtimeError);
+		console.warn('[bootstrap] API router was not loaded:', `${primaryMessage}; fallback: ${fallbackMessage}`);
 	}
 }
 
@@ -65,10 +78,11 @@ app.use((err, _req, res, _next) => {
 	const message = err instanceof Error ? err.message : 'Internal server error';
 	const details = process.env.NODE_ENV === 'production' ? undefined : err;
 
-	res.status(500).json({
+	const statusCode = err.statusCode || 500;
+	res.status(statusCode).json({
 		success: false,
 		error: {
-			code: 'INTERNAL_SERVER_ERROR',
+			code: err.code || 'INTERNAL_SERVER_ERROR',
 			message,
 			details,
 		},

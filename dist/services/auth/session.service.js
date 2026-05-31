@@ -34,12 +34,42 @@ function createTokenScopedClient(accessToken) {
         },
     });
 }
+function buildDisplayName(userData) {
+    const explicitName = String(userData.full_name ?? '').trim();
+    if (explicitName.length > 0) {
+        return explicitName;
+    }
+    const derivedName = [userData.first_name, userData.last_name]
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    return derivedName || 'User';
+}
+function toSessionUser(userData, authUserId, emailVerified) {
+    return {
+        id: userData.id,
+        auth_id: authUserId,
+        email: userData.email,
+        full_name: buildDisplayName(userData),
+        phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
+        org_id: userData.org_id ?? undefined,
+        role: userData.role,
+        is_active: userData.is_active,
+        geographic_area: userData.geographic_area,
+        email_verified: emailVerified,
+        created_at: userData.created_at,
+        updated_at: userData.updated_at,
+    };
+}
 /**
  * Get current authenticated user with full profile and organization
  */
 async function getCurrentUser(accessToken) {
     try {
         const scopedClient = createTokenScopedClient(accessToken);
+        // Supabase validates a custom bearer JWT when it is passed directly to getUser(jwt).
+        // Relying on a client-level Authorization header alone does not create an auth session.
         const { data: { user }, error: sessionError } = accessToken
             ? await scopedClient.auth.getUser(accessToken)
             : await scopedClient.auth.getUser();
@@ -63,20 +93,7 @@ async function getCurrentUser(accessToken) {
         if (!userData) {
             return null;
         }
-        return {
-            id: userData.id,
-            auth_id: user.id,
-            email: userData.email,
-            full_name: userData.full_name,
-            phone_number: userData.phone_number,
-            org_id: userData.org_id,
-            role: userData.role,
-            is_active: userData.is_active,
-            geographic_area: userData.geographic_area,
-            email_verified: !!user.email_confirmed_at,
-            created_at: userData.created_at,
-            updated_at: userData.updated_at,
-        };
+        return toSessionUser(userData, user.id, !!user.email_confirmed_at);
     }
     catch (error) {
         if (error.code) {
@@ -92,7 +109,7 @@ async function getUserOrganization(orgId) {
     try {
         const { data: orgData, error: orgError } = await supabase
             .from('organizations')
-            .select('*')
+            .select('id, name, is_active, settings')
             .eq('id', orgId)
             .maybeSingle();
         if (orgError || !orgData) {
@@ -193,20 +210,7 @@ async function refreshSession() {
                 details: userError,
             };
         }
-        const sessionUser = {
-            id: userData.id,
-            auth_id: data.user.id,
-            email: userData.email,
-            full_name: userData.full_name,
-            phone_number: userData.phone_number,
-            org_id: userData.org_id,
-            role: userData.role,
-            is_active: userData.is_active,
-            geographic_area: userData.geographic_area,
-            email_verified: !!data.user.email_confirmed_at,
-            created_at: userData.created_at,
-            updated_at: userData.updated_at,
-        };
+        const sessionUser = toSessionUser(userData, data.user.id, !!data.user.email_confirmed_at);
         return {
             accessToken: data.session.access_token,
             refreshToken: data.session.refresh_token,

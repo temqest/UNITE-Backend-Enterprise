@@ -61,7 +61,7 @@ function logAuthDecision(
 type GetUserFromRequestFn = (authHeader?: string) => Promise<any>;
 
 async function defaultGetUserFromRequest(authHeader?: string): Promise<any> {
-  const authService = await import('../services/auth/session.service.js');
+  const authService = require('../services/auth/session.service');
   return authService.getUserFromRequest(authHeader);
 }
 

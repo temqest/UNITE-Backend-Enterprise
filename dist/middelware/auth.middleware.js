@@ -28,7 +28,7 @@ function logAuthDecision(req, decision, reasonCode, userId, role, orgId) {
     console.info(output);
 }
 async function defaultGetUserFromRequest(authHeader) {
-    const authService = await import('../services/auth/session.service.js');
+    const authService = require('../services/auth/session.service');
     return authService.getUserFromRequest(authHeader);
 }
 function createAuthMiddleware(getUserFromRequestFn = defaultGetUserFromRequest) {

@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.plottingCalendarsRouter = void 0;
+const express_1 = require("express");
+const plotting_calendar_controller_1 = require("../../controllers/events/plotting-calendar.controller");
+const auth_middleware_1 = require("../../../../middelware/auth.middleware");
+const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
+const async_handler_1 = require("../../../../lib/async-handler");
+const plotting_calendars_share_routes_1 = require("./plotting-calendars-share.routes");
+const plottingCalendarsRouter = (0, express_1.Router)();
+exports.plottingCalendarsRouter = plottingCalendarsRouter;
+// Mount public share routes
+plottingCalendarsRouter.use('/share', plotting_calendars_share_routes_1.plottingCalendarsShareRouter);
+plottingCalendarsRouter.get('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.listPlottingCalendarsController));
+plottingCalendarsRouter.get('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.getPlottingCalendarController));
+plottingCalendarsRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.createPlottingCalendarController));
+plottingCalendarsRouter.patch('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.updatePlottingCalendarController));
+plottingCalendarsRouter.delete('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.delete'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.deletePlottingCalendarController));
+plottingCalendarsRouter.get('/:id/availability', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.getPlottingCalendarAvailabilityController));
+plottingCalendarsRouter.put('/:id/availability', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.savePlottingCalendarAvailabilityController));
+plottingCalendarsRouter.get('/:id/available-slots', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.getPlottingCalendarAvailableSlotsController));
+plottingCalendarsRouter.post('/:id/plot-event', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.plotEventFromCalendarController));
+exports.default = plottingCalendarsRouter;

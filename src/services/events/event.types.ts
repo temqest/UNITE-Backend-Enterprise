@@ -1,9 +1,13 @@
 import type {
 	EventApprovalAction,
+	PlottingCalendarStatus,
 	EventParticipantRow,
 	EventRow,
+	EventCreationMethod,
+	EventSetupStatus,
 	EventStaffRole,
 	EventStatus,
+	EventType,
 	ParticipantStatus,
 	ParticipantType,
 } from '../../models/events/types';
@@ -35,11 +39,14 @@ export interface EventActorContext {
 export interface EventFilter {
 	org_id?: string;
 	statuses?: EventStatus[];
-	types?: EventRow['type'][];
+	setup_statuses?: EventSetupStatus[];
+	types?: EventType[];
 	from_date?: string;
 	to_date?: string;
 	requested_by_user_id?: string;
 	include_public?: boolean;
+	creation_methods?: EventCreationMethod[];
+	hosting_organization?: string;
 	search?: string;
 	limit?: number;
 	offset?: number;
@@ -75,12 +82,10 @@ export interface EventApprovalAuditMeta {
 export type EventAvailableAction =
 	| 'view_private'
 	| 'edit_event'
-	| 'request_approval'
-	| 'approve_event'
-	| 'reject_event'
-	| 'reschedule_event'
-	| 'cancel_published_event'
-	| 'reschedule_published_event'
+	| 'complete_event_setup'
+	| 'publish_event'
+	| 'change_event_status'
+	| 'cancel_event'
 	| 'assign_staff'
 	| 'remove_staff'
 	| 'apply_as_staff'
@@ -97,6 +102,20 @@ export interface EventActionAvailability {
 
 export interface ReviewerCandidate extends UserRow {
 	reviewer_reason: string;
+}
+
+export interface EventStatusUpdateInput {
+	event_id: string;
+	status: Extract<EventStatus, 'draft' | 'plotted' | 'needs_details' | 'scheduled' | 'published' | 'ongoing' | 'completed' | 'cancelled'>;
+	notes?: string | null;
+}
+
+export interface PlottingCalendarFilter {
+	org_id?: string;
+	statuses?: PlottingCalendarStatus[];
+	search?: string;
+	limit?: number;
+	offset?: number;
 }
 
 export interface AssignStaffInput {
@@ -151,8 +170,9 @@ export function hasPermission(user: EventActorContext, permission: string): bool
 		return true;
 	}
 
-	const permissions = user.role.permissions ?? [];
-	return permissions.includes('*') || permissions.includes(permission);
+	const requested = normalizePermission(permission);
+	const permissions = new Set((user.role.permissions ?? []).map(normalizePermission).filter(Boolean));
+	return permissions.has('*') || permissions.has(requested);
 }
 
 export function getRoleRank(roleType: string): number {
@@ -209,19 +229,21 @@ export function isGeoAreaMatch(
 
 export function canTransitionEventStatus(fromStatus: EventStatus, toStatus: EventStatus): boolean {
 	const allowed: Record<EventStatus, EventStatus[]> = {
-		requested: ['pending', 'approved', 'rejected', 'rescheduled'],
-		pending: ['approved', 'rejected', 'rescheduled'],
-		approved: ['approved', 'pending', 'rescheduled', 'rejected', 'completed'],
-		rejected: ['rejected'],
-		rescheduled: ['pending', 'approved', 'rejected', 'rescheduled', 'completed'],
+		draft: ['draft', 'needs_details', 'scheduled', 'published', 'cancelled'],
+		plotted: ['plotted', 'needs_details', 'scheduled', 'published', 'cancelled'],
+		needs_details: ['needs_details', 'scheduled', 'published', 'cancelled'],
+		scheduled: ['scheduled', 'needs_details', 'published', 'ongoing', 'completed', 'cancelled'],
+		published: ['published', 'scheduled', 'ongoing', 'completed', 'cancelled'],
+		ongoing: ['ongoing', 'completed', 'cancelled'],
 		completed: ['completed'],
+		cancelled: ['cancelled'],
 	};
 
 	return allowed[fromStatus]?.includes(toStatus) ?? false;
 }
 
 export function buildEventSearchText(event: Pick<EventRow, 'title' | 'address' | 'description'>): string {
-	return [event.title, event.address, event.description ?? ''].join(' ').toLowerCase();
+	return [event.title, event.address ?? '', event.description ?? ''].join(' ').toLowerCase();
 }
 
 export function isActiveParticipantStatus(status: ParticipantStatus): boolean {
@@ -230,4 +252,24 @@ export function isActiveParticipantStatus(status: ParticipantStatus): boolean {
 
 export interface ParticipantWithEvent extends EventParticipantRow {
 	event?: Pick<EventRow, 'id' | 'org_id' | 'status' | 'event_date' | 'title'>;
+}
+
+function normalizePermission(permission: string): string {
+	const normalized = permission.trim().toLowerCase();
+	if (!normalized) {
+		return normalized;
+	}
+
+	const aliases: Record<string, string> = {
+		create_events: 'events.create',
+		manage_events: 'events.update',
+		edit_events: 'events.update',
+		view_events: 'events.read',
+		approve_events: 'events.approve',
+		auto_approve_events: 'events.approve',
+		assign_event_staff: 'events.update',
+		manage_event_participants: 'events.update',
+	};
+
+	return aliases[normalized] ?? normalized.replace(/_/g, '.');
 }

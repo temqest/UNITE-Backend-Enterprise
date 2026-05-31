@@ -84,7 +84,7 @@ export async function listMyEventsController(req: Request, res: Response): Promi
     }
 
     const query = req.query ?? {};
-    const allowedStatuses: EventStatus[] = ['requested', 'pending', 'approved', 'rejected', 'rescheduled', 'completed'];
+    const allowedStatuses: EventStatus[] = ['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'];
     const allowedTypes: EventType[] = ['blood_drive', 'training', 'advocacy', 'assembly'];
     const filter = {
       statuses: parseEnumArray<EventStatus>(query.status, allowedStatuses),

@@ -3,7 +3,6 @@
  * Handles email/password and magic link authentication
  */
 
-import { createClient } from '@supabase/supabase-js';
 import {
   LoginInput,
   MagicLinkInput,
@@ -16,13 +15,25 @@ import {
   GeographicArea,
 } from './auth.types';
 import { resolveCanonicalRole } from './rbac.constants';
-
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from '../../lib/supabase/supabase.client';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function buildDisplayName(userData: any): string {
+  const explicitName = String(userData?.full_name ?? '').trim();
+  if (explicitName.length > 0) {
+    return explicitName;
+  }
+
+  const derivedName = [userData?.first_name, userData?.last_name]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return derivedName || 'User';
 }
 
 async function resolveOrLinkUserProfile(authUserId: string, email?: string | null): Promise<any> {
@@ -75,9 +86,9 @@ async function resolveOrLinkUserProfile(authUserId: string, email?: string | nul
     } as AuthError;
   }
 
-  const linked = rows[0];
-  const { data: updatedProfile, error: updateError } = await supabase
-    .from('users')
+  const linked = rows[0] as any;
+  const { data: updatedProfile, error: updateError } = await (supabase
+    .from('users') as any)
     .update({
       auth_id: authUserId,
       email: normalizedEmail,
@@ -151,9 +162,10 @@ export async function loginWithEmailPassword(
 
     const sessionUser: SessionUser = {
       id: userData.id,
+      auth_id: authData.user.id,
       email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
+      full_name: buildDisplayName(userData),
+      phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
       org_id: userData.org_id,
       role: userData.role as UserRole,
       is_active: userData.is_active,
@@ -174,20 +186,21 @@ export async function loginWithEmailPassword(
         .single();
 
       if (orgData) {
+        const org = orgData as any;
         // Check if organization is active
-        if (!orgData.is_active) {
+        if (!org.is_active) {
           throw {
             code: AuthErrorCode.INACTIVE_ORG,
             message: 'Your organization is currently inactive',
-            details: { orgId: orgData.id },
+            details: { orgId: org.id },
           } as AuthError;
         }
 
         organization = {
-          id: orgData.id,
-          name: orgData.name,
-          is_active: orgData.is_active,
-          settings: orgData.settings,
+          id: org.id,
+          name: org.name,
+          is_active: org.is_active,
+          settings: org.settings,
         };
       }
     }
@@ -290,9 +303,10 @@ export async function verifyMagicLink(
 
     const sessionUser: SessionUser = {
       id: userData.id,
+      auth_id: authData.user.id,
       email: userData.email,
-      full_name: userData.full_name,
-      phone_number: userData.phone_number,
+      full_name: buildDisplayName(userData),
+      phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
       org_id: userData.org_id,
       role: userData.role as UserRole,
       is_active: userData.is_active,
@@ -313,19 +327,20 @@ export async function verifyMagicLink(
         .single();
 
       if (orgData) {
-        if (!orgData.is_active) {
+        const org = orgData as any;
+        if (!org.is_active) {
           throw {
             code: AuthErrorCode.INACTIVE_ORG,
             message: 'Your organization is currently inactive',
-            details: { orgId: orgData.id },
+            details: { orgId: org.id },
           } as AuthError;
         }
 
         organization = {
-          id: orgData.id,
-          name: orgData.name,
-          is_active: orgData.is_active,
-          settings: orgData.settings,
+          id: org.id,
+          name: org.name,
+          is_active: org.is_active,
+          settings: org.settings,
         };
       }
     }

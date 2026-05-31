@@ -122,7 +122,7 @@ export class EventParticipantsService {
         };
       }
 
-      if (!['approved', 'pending', 'rescheduled'].includes(event.status)) {
+      if (!['scheduled', 'published', 'ongoing'].includes(event.status)) {
         return {
           data: null,
           error: toServiceError('INVALID_EVENT_STATE', 'Cannot apply to this event in its current status.'),

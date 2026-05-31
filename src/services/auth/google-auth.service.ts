@@ -226,7 +226,7 @@ async function linkGoogleAuthToExistingProfile(authUser: ResolvedGoogleAuthUser)
   return updatedProfile as UserProfileRow;
 }
 
-function toSessionUser(authUser: { email_confirmed_at?: string | null; user_metadata?: Record<string, unknown> }, userData: UserProfileRow): SessionUser {
+function toSessionUser(authUser: { id?: string; email_confirmed_at?: string | null; user_metadata?: Record<string, unknown> }, userData: UserProfileRow): SessionUser {
   const computedFullName = [userData.first_name, userData.last_name]
     .filter((part: unknown) => typeof part === 'string' && part.trim().length > 0)
     .join(' ')
@@ -234,6 +234,7 @@ function toSessionUser(authUser: { email_confirmed_at?: string | null; user_meta
 
   return {
     id: String(userData.id),
+    auth_id: String(authUser.id ?? userData.auth_id),
     email: String(userData.email),
     full_name: String(userData.full_name ?? (computedFullName || 'User')),
     phone_number: typeof userData.phone_number === 'string' ? userData.phone_number : undefined,
@@ -343,7 +344,9 @@ async function buildSessionForAuthUser(input: {
 
 async function resolveGoogleAuthUser(accessToken: string): Promise<ResolvedGoogleAuthUser> {
   const scopedClient = createTokenScopedClient(accessToken);
-  const { data, error } = await scopedClient.auth.getUser(accessToken);
+  // getUser() validates the token from the Authorization header
+  // Don't pass accessToken as parameter - it's already set in the header
+  const { data, error } = await scopedClient.auth.getUser();
 
   if (error || !data.user?.id || !data.user.email) {
     throw {

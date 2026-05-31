@@ -64,7 +64,7 @@ export interface LoginResponse {
   user: SessionUser;
   organization?: OrganizationInfo;
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   redirectTo: string;
 }
 

@@ -7,6 +7,7 @@ const { createAuthMiddleware } = require('../src/middelware/auth.middleware.ts')
 const {
   requireActiveUser,
   requireOrgScope,
+  requireRole,
 } = require('../src/middelware/authorization.middleware.ts');
 
 function createMockRes() {
@@ -118,4 +119,46 @@ test('Authenticated active user with scope -> 200 (middleware pass)', async () =
     orgNext = true;
   });
   assert.equal(orgNext, true);
+});
+
+test('Role guard rejects authenticated user with wrong role', () => {
+  const req = createReq({
+    user: {
+      id: 'u-1',
+      org_id: 'org-1',
+      role: { type: 'viewer', permissions: [] },
+      is_active: true,
+    },
+  });
+  const res = createMockRes();
+
+  let nextCalled = false;
+  requireRole('admin', 'super_admin')(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body?.error?.code, 'FORBIDDEN');
+});
+
+test('Role guard accepts canonical role from auth middleware', () => {
+  const req = createReq({
+    user: {
+      id: 'u-1',
+      org_id: 'org-1',
+      canonical_role: 'admin',
+      role: { type: 'org_admin', permissions: [] },
+      is_active: true,
+    },
+  });
+  const res = createMockRes();
+
+  let nextCalled = false;
+  requireRole('admin')(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true);
+  assert.equal(res.statusCode, 200);
 });

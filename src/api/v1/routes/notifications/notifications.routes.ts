@@ -6,6 +6,7 @@ import {
   markNotificationReadController,
 } from '../../controllers/notifications/notification.controller';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
+import { requireActiveUser } from '../../../../middelware/authorization.middleware';
 import {
   notificationsReadRateLimiter,
   notificationsWriteRateLimiter,
@@ -59,6 +60,7 @@ const paramsValidator = {
 notificationsRouter.get(
   '/',
   authMiddleware,
+  requireActiveUser,
   notificationsReadRateLimiter,
   validateMiddleware(queryValidator, 'query'),
   asyncHandler(getNotificationsController as any)
@@ -67,6 +69,7 @@ notificationsRouter.get(
 notificationsRouter.get(
   '/unread',
   authMiddleware,
+  requireActiveUser,
   notificationsReadRateLimiter,
   asyncHandler(getUnreadCountController as any)
 );
@@ -74,6 +77,7 @@ notificationsRouter.get(
 notificationsRouter.patch(
   '/:id/read',
   authMiddleware,
+  requireActiveUser,
   notificationsWriteRateLimiter,
   validateMiddleware(paramsValidator, 'params'),
   asyncHandler(markNotificationReadController as any)

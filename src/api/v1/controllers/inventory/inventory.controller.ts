@@ -148,3 +148,78 @@ export async function recordInventoryTransactionController(req: AuthenticatedReq
 
   res.status(201).json({ success: true, data: result.data });
 }
+
+
+export async function batchUpdateInventoryController(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (!requireOrgUser(req, res)) {
+    return;
+  }
+
+  // Basic validation before passing to service
+  if (!req.body || !Array.isArray(req.body.items) || req.body.items.length === 0) {
+    sendError(res, 400, {
+      code: 'INVENTORY_BATCH_TRANSACTION_INVALID',
+      message: 'Payload must include an items array.',
+    });
+    return;
+  }
+
+  const result = await inventoryService.recordBatchTransactions({
+    org_id: req.user.org_id,
+    performed_by_user_id: req.user.id,
+    reason: req.body.reason,
+    source: req.body.source,
+    items: req.body.items,
+  });
+
+  if (result.error || !result.data) {
+    sendError(res, 400, {
+      code: result.error?.code ?? 'INVENTORY_BATCH_TRANSACTION_FAILED',
+      message: result.error?.message ?? 'Failed to process inventory batch transaction.',
+      details: result.error?.details,
+    });
+    return;
+  }
+
+  res.status(201).json({ success: true, data: result.data });
+}
+
+const transactionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  date: z.string().trim().optional(),
+});
+
+export async function getInventoryTransactionsController(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (!requireOrgUser(req, res)) {
+    return;
+  }
+
+  const parsedQuery = transactionsQuerySchema.safeParse(req.query ?? {});
+  if (!parsedQuery.success) {
+    sendError(res, 400, {
+      code: 'INVENTORY_TRANSACTIONS_QUERY_INVALID',
+      message: 'Invalid transactions query parameters.',
+      details: parsedQuery.error.issues,
+    });
+    return;
+  }
+
+  const result = await inventoryService.getTransactions(req.user.org_id, {
+    page: parsedQuery.data.page,
+    limit: parsedQuery.data.limit,
+    date: parsedQuery.data.date,
+  });
+
+  if (result.error || !result.data) {
+    sendError(res, 400, {
+      code: result.error?.code ?? 'INVENTORY_TRANSACTIONS_FETCH_FAILED',
+      message: result.error?.message ?? 'Failed to load inventory transactions.',
+      details: result.error?.details,
+    });
+    return;
+  }
+
+  res.status(200).json({ success: true, data: result.data });
+}
+

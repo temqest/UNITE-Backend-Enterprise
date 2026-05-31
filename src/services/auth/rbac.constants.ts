@@ -47,17 +47,27 @@ export const PERMISSION_CATALOG = [
   'reports.export',
   'settings.read',
   'settings.update',
+  'coverage.read',
+  'coverage.create',
+  'coverage.update',
+  'coverage.delete',
 ] as const;
 
 export type PermissionName = (typeof PERMISSION_CATALOG)[number];
 
 const LEGACY_PERMISSION_MAP: Record<string, string> = {
+  create_events: 'events.create',
   approve_staff: 'users.approve',
   manage_staff: 'users.invite',
   manage_users: 'users.invite',
   manage_org_settings: 'settings.update',
   manage_events: 'events.update',
+  edit_events: 'events.update',
+  view_events: 'events.read',
   approve_events: 'events.approve',
+  auto_approve_events: 'events.approve',
+  assign_event_staff: 'events.update',
+  manage_event_participants: 'events.update',
   'event.approve': 'events.approve',
   'event.aprove': 'events.approve',
   'events.aprove': 'events.approve',
@@ -93,6 +103,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'reports.export',
     'settings.read',
     'settings.update',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
   coordinator: [
     'campaigns.read',
@@ -111,6 +125,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'documents.read',
     'documents.write',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 
   doctor: [
@@ -124,6 +142,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'inventory.update',
     'documents.read',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 
   nurse: [
@@ -133,6 +155,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'inventory.read',
     'inventory.update',
     'documents.read',
+    'coverage.read',
   ],
 
   stakeholder: [
@@ -142,6 +165,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'events.update',
     'chat.read',
     'documents.read',
+    'coverage.read',
   ],
 
   donor: [
@@ -154,6 +178,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CanonicalRole, string[]> = {
     'campaigns.read',
     'events.read',
     'reports.read',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
   ],
 };
 
