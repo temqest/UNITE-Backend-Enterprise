@@ -45,5 +45,5 @@ The `/dashboard` endpoint returns a composite JSON structure:
 
 ## Known Limitations & Future Work
 - **Historical Code Red Tracking**: True historical snapshots are not currently available in the schema. Current Code Red logic generates simulated ongoing alerts based on current inventory dropping below minimum thresholds. A snapshot system (e.g., daily cron jobs recording stock levels) is required for accurate historical reporting.
-- **Performance Tuning**: As the event dataset grows, the complex joins in `analytics.service.ts` may require caching strategies (e.g., Redis) or materialized views in Supabase to maintain optimal dashboard load times.
+- **Performance Tuning**: As the event dataset grows, complex joins may require materialized views in Supabase. We have implemented frontend TTL caching (via `cachedApiResponse` and `api-cache.ts`) and backend in-memory cache in the controller with 60s TTL to prevent burst querying. Backend service queries are parallelized with `Promise.all` for speed.
 - **Dedicated Permissions**: If a dedicated `analytics.read` scope is added to the RBAC system, the route definition in `analytics.routes.ts` should be updated.

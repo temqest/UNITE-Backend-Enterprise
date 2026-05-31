@@ -13,12 +13,15 @@ export class AnalyticsService {
       bloodType: query.blood_type
     };
 
-    const summary = await this.getSummaryMetrics(orgId, filters);
-    const events = await this.getEventAnalytics(orgId, filters);
-    const collection = await this.getCollectionPerformance(orgId, filters);
-    const inventory = await this.getInventoryAnalytics(orgId, filters);
-    const coverage = await this.getCoverageAnalytics(orgId, filters);
-    const staff = await this.getStaffAnalytics(orgId, filters);
+    const [summary, events, collection, inventory, coverage, staff] = await Promise.all([
+      this.getSummaryMetrics(orgId, filters),
+      this.getEventAnalytics(orgId, filters),
+      this.getCollectionPerformance(orgId, filters),
+      this.getInventoryAnalytics(orgId, filters),
+      this.getCoverageAnalytics(orgId, filters),
+      this.getStaffAnalytics(orgId, filters)
+    ]);
+
     const insights = await this.getOperationalInsights(orgId, filters, inventory, events, coverage);
     const keyFindings = await this.getKeyFindings(orgId, insights);
 
@@ -59,7 +62,7 @@ export class AnalyticsService {
     let targetUnits = 0;
     
     if (eventData) {
-      eventData.forEach(e => {
+      eventData.forEach((e: any) => {
         collectedUnits += (e.actual_collected_bags || 0);
         if (e.extra_data && typeof e.extra_data === 'object' && 'target_donation' in e.extra_data) {
            targetUnits += (Number((e.extra_data as any).target_donation) || 0);
@@ -100,7 +103,7 @@ export class AnalyticsService {
     const byType: Record<string, number> = {};
     const creationMethod = { manual: 0, plotting_calendar: 0 };
 
-    (events || []).forEach(e => {
+    (events || []).forEach((e: any) => {
       byStatus[e.status] = (byStatus[e.status] || 0) + 1;
       byType[e.type] = (byType[e.type] || 0) + 1;
       if (e.creation_method === 'manual') creationMethod.manual++;
@@ -124,7 +127,7 @@ export class AnalyticsService {
       .order('event_date', { ascending: true });
 
     const monthly: Record<string, number> = {};
-    (events || []).forEach(e => {
+    (events || []).forEach((e: any) => {
       if (!e.event_date) return;
       const d = new Date(e.event_date);
       const month = d.toLocaleString('default', { month: 'short' });
@@ -133,7 +136,7 @@ export class AnalyticsService {
 
     const monthly_collections = Object.entries(monthly).map(([month, units]) => ({ month, units }));
     let topMonth = { month: 'N/A', units: 0 };
-    monthly_collections.forEach(m => {
+    monthly_collections.forEach((m: any) => {
       if (m.units > topMonth.units) topMonth = m;
     });
 
@@ -154,7 +157,7 @@ export class AnalyticsService {
 
     const aggregated: Record<string, { blood_type: string; quantity: number; min_threshold: number }> = {};
     
-    (inventory || []).forEach(item => {
+    (inventory || []).forEach((item: any) => {
       if (!aggregated[item.blood_type]) {
         aggregated[item.blood_type] = { blood_type: item.blood_type, quantity: 0, min_threshold: item.min_threshold || 0 };
       }
@@ -164,12 +167,12 @@ export class AnalyticsService {
     });
 
     const bloodTypesOrder = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-    const currentStock = Object.values(aggregated).sort((a, b) => 
+    const currentStock = Object.values(aggregated).sort((a: any, b: any) => 
       bloodTypesOrder.indexOf(a.blood_type) - bloodTypesOrder.indexOf(b.blood_type)
     );
 
-    const lowStock = currentStock.filter(i => i.quantity < i.min_threshold);
-    const codeRed = currentStock.filter(i => i.quantity <= Math.max(5, i.min_threshold * 0.3));
+    const lowStock = currentStock.filter((i: any) => i.quantity < i.min_threshold);
+    const codeRed = currentStock.filter((i: any) => i.quantity <= Math.max(5, i.min_threshold * 0.3));
 
     return {
       current_stock: currentStock,
@@ -186,21 +189,21 @@ export class AnalyticsService {
       .eq('status', 'active');
 
     // Mapped mock data for now since event matching by PSGC requires complex joins not fully implemented
-    const areaProgress = (areas || []).map(a => ({
+    const areaProgress = (areas || []).map((a: any) => ({
       area: a.area_name,
       target: a.target_units || 100,
       collected: Math.floor(Math.random() * (a.target_units || 100)), // Placeholder
       progress: 0
     }));
 
-    areaProgress.forEach(a => {
+    areaProgress.forEach((a: any) => {
       a.progress = a.target > 0 ? Math.round((a.collected / a.target) * 100) : 0;
     });
 
     return {
-      progress_by_area: areaProgress.sort((a, b) => b.progress - a.progress),
-      top_performing_areas: areaProgress.filter(a => a.progress >= 80).slice(0, 3),
-      areas_needing_attention: areaProgress.filter(a => a.progress < 50)
+      progress_by_area: areaProgress.sort((a: any, b: any) => b.progress - a.progress),
+      top_performing_areas: areaProgress.filter((a: any) => a.progress >= 80).slice(0, 3),
+      areas_needing_attention: areaProgress.filter((a: any) => a.progress < 50)
     };
   }
 
@@ -212,7 +215,7 @@ export class AnalyticsService {
 
     // Aggregate by user
     const userStats: Record<string, { assigned: number, completed: number, units: number }> = {};
-    (staffData || []).forEach(s => {
+    (staffData || []).forEach((s: any) => {
       if (!userStats[s.user_id]) userStats[s.user_id] = { assigned: 0, completed: 0, units: 0 };
       userStats[s.user_id].assigned++;
       const event: any = s.events;
