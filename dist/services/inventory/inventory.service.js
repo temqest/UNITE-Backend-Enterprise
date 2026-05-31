@@ -22,6 +22,22 @@ const RecordTransactionSchema = zod_1.z.object({
     reference_type: zod_1.z.string().trim().optional().nullable(),
     reference_id: zod_1.z.string().uuid().optional().nullable(),
 });
+const RecordBatchTransactionSchema = zod_1.z.object({
+    org_id: zod_1.z.string().uuid(),
+    performed_by_user_id: zod_1.z.string().uuid(),
+    reason: zod_1.z.string().trim().optional(),
+    source: zod_1.z.string().trim().optional(),
+    items: zod_1.z.array(zod_1.z.object({
+        blood_type: zod_1.z.enum(types_1.BLOOD_TYPES),
+        transaction_type: zod_1.z.enum(['add_stock', 'usage', 'wastage', 'adjustment']),
+        direction: zod_1.z.enum(['in', 'out']).optional(),
+        quantity: zod_1.z.number().int().min(1),
+        min_threshold: zod_1.z.number().int().min(0).optional(),
+        location: zod_1.z.string().trim().min(1).optional().nullable(),
+        expiry_date: zod_1.z.string().date().optional().nullable(),
+        notes: zod_1.z.string().trim().optional().nullable(),
+    })),
+});
 const BASELINE_ROWS_TTL_MS = 10 * 60 * 1000;
 const baselineRowsEnsuredAtByOrg = new Map();
 function deriveStatus(currentStock, minThreshold) {
@@ -401,6 +417,97 @@ class InventoryService {
         }
         return {
             data: transactionRow,
+            error: null,
+        };
+    }
+    async recordBatchTransactions(payload) {
+        const parsed = RecordBatchTransactionSchema.safeParse(payload);
+        if (!parsed.success) {
+            return {
+                data: null,
+                error: (0, inventory_types_1.toInventoryError)('INVENTORY_BATCH_TRANSACTION_INVALID', 'Invalid inventory batch transaction payload.', parsed.error.issues),
+            };
+        }
+        const { items, org_id, performed_by_user_id, reason, source } = parsed.data;
+        const errors = [];
+        let successCount = 0;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const transactionPayload = {
+                org_id,
+                performed_by_user_id,
+                blood_type: item.blood_type,
+                transaction_type: item.transaction_type,
+                direction: item.direction,
+                quantity: item.quantity,
+                min_threshold: item.min_threshold,
+                location: item.location,
+                expiry_date: item.expiry_date,
+                notes: item.notes || reason || undefined,
+                reference_type: source || undefined,
+            };
+            const result = await this.recordTransaction(transactionPayload);
+            if (result.error) {
+                errors.push({
+                    index: i,
+                    code: result.error.code,
+                    message: result.error.message,
+                });
+            }
+            else {
+                successCount++;
+            }
+        }
+        if (successCount === 0 && items.length > 0) {
+            return {
+                data: null,
+                error: (0, inventory_types_1.toInventoryError)('INVENTORY_BATCH_TRANSACTION_FAILED', 'All items in the batch failed to process.', errors),
+            };
+        }
+        return {
+            data: {
+                success_count: successCount,
+                error_count: errors.length,
+                errors,
+            },
+            error: null,
+        };
+    }
+    async getTransactions(orgId, query) {
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.max(1, Math.min(100, query.limit ?? 10));
+        const transactionsTable = this.supabase.from('blood_inventory_transactions');
+        let dbQuery = transactionsTable
+            .select('*', { count: 'exact' })
+            .eq('org_id', orgId);
+        if (query.date) {
+            const nextDate = new Date(query.date);
+            if (!isNaN(nextDate.getTime())) {
+                nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+                const nextDateStr = nextDate.toISOString().slice(0, 10);
+                dbQuery = dbQuery
+                    .gte('created_at', `${query.date}T00:00:00.000Z`)
+                    .lt('created_at', `${nextDateStr}T00:00:00.000Z`);
+            }
+        }
+        const from = (page - 1) * limit;
+        const to = page * limit - 1;
+        const { data, error, count } = await dbQuery
+            .order('created_at', { ascending: false })
+            .range(from, to);
+        if (error) {
+            return {
+                data: null,
+                error: (0, inventory_types_1.toInventoryError)('INVENTORY_TRANSACTIONS_FETCH_FAILED', 'Failed to load inventory transactions.', error),
+            };
+        }
+        return {
+            data: {
+                items: (data ?? []),
+                total: count ?? 0,
+                page,
+                limit,
+            },
             error: null,
         };
     }

@@ -48,6 +48,10 @@ exports.PERMISSION_CATALOG = [
     'reports.export',
     'settings.read',
     'settings.update',
+    'coverage.read',
+    'coverage.create',
+    'coverage.update',
+    'coverage.delete',
 ];
 const LEGACY_PERMISSION_MAP = {
     create_events: 'events.create',
@@ -96,6 +100,10 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'reports.export',
         'settings.read',
         'settings.update',
+        'coverage.read',
+        'coverage.create',
+        'coverage.update',
+        'coverage.delete',
     ],
     coordinator: [
         'campaigns.read',
@@ -114,6 +122,10 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'documents.read',
         'documents.write',
         'reports.read',
+        'coverage.read',
+        'coverage.create',
+        'coverage.update',
+        'coverage.delete',
     ],
     doctor: [
         'events.read',
@@ -126,6 +138,10 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'inventory.update',
         'documents.read',
         'reports.read',
+        'coverage.read',
+        'coverage.create',
+        'coverage.update',
+        'coverage.delete',
     ],
     nurse: [
         'events.read',
@@ -134,6 +150,7 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'inventory.read',
         'inventory.update',
         'documents.read',
+        'coverage.read',
     ],
     stakeholder: [
         'campaigns.read',
@@ -142,6 +159,7 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'events.update',
         'chat.read',
         'documents.read',
+        'coverage.read',
     ],
     donor: [
         'campaigns.read',
@@ -152,6 +170,10 @@ exports.ROLE_DEFAULT_PERMISSIONS = {
         'campaigns.read',
         'events.read',
         'reports.read',
+        'coverage.read',
+        'coverage.create',
+        'coverage.update',
+        'coverage.delete',
     ],
 };
 function resolveCanonicalRole(roleType) {

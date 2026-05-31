@@ -16,10 +16,18 @@ const PlotEventPublicSchema = zod_1.z.object({
     description: zod_1.z.string().trim().optional().nullable(),
     target_donations: zod_1.z.number().int().positive().optional().nullable(),
     visitor_name: zod_1.z.string().trim().min(2),
-    visitor_address: zod_1.z.string().trim().min(5),
+    visitor_address: zod_1.z.string().trim().optional().or(zod_1.z.literal('')),
     organization_name: zod_1.z.string().trim().optional().nullable(),
     contact_number: zod_1.z.string().trim().optional().nullable(),
     email: zod_1.z.string().email().or(zod_1.z.literal('')).optional().nullable(),
+    coverage_area_id: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_province: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_municipality: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_barangay: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_psgc_code: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_name: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_boundary_id: zod_1.z.string().trim().optional().nullable(),
+    coverage_area_normalized_key: zod_1.z.string().trim().optional().nullable(),
 }).superRefine((value, context) => {
     if (value.start_time >= value.end_time) {
         context.addIssue({
@@ -160,6 +168,14 @@ class PlottingCalendarShareService {
                 address: parsed.visitor_address || parsed.address || null,
                 description: parsed.description || null,
                 hosting_organization: parsed.organization_name || parsed.visitor_name,
+                coverage_area_id: parsed.coverage_area_id,
+                coverage_area_province: parsed.coverage_area_province,
+                coverage_area_municipality: parsed.coverage_area_municipality,
+                coverage_area_barangay: parsed.coverage_area_barangay,
+                coverage_area_psgc_code: parsed.coverage_area_psgc_code,
+                coverage_area_name: parsed.coverage_area_name,
+                coverage_area_boundary_id: parsed.coverage_area_boundary_id,
+                coverage_area_normalized_key: parsed.coverage_area_normalized_key,
                 extra_data,
             };
             const plotResult = await this.plottingCalendarService.plotEvent(actor, calendarResult.data.id, internalInput);
