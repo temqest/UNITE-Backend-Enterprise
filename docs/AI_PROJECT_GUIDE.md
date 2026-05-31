@@ -139,6 +139,7 @@ UNITE-Backend-Enterprise/
 | `/unauthorized` | `app/unauthorized/page.tsx` | Permission denied |
 | `/events` | `app/events/page.tsx` | Public events (Needs verification: donor vs staff) |
 | `/dashboard` | `app/dashboard/page.tsx` | Main dashboard |
+| `/dashboard/analytics` | `app/dashboard/analytics/page.tsx` | Operations Analytics (v1 UI/Mock Data Only) |
 | `/dashboard/coverage-map` | `app/dashboard/coverage-map/page.tsx` | Donation coverage map |
 | `/dashboard/campaign` | `app/dashboard/campaign/page.tsx` | Campaign / event management |
 | `/dashboard/plotting-calendars` | `app/dashboard/plotting-calendars/page.tsx` | Plotting calendar admin + reserve |
@@ -386,6 +387,7 @@ All authenticated user routes use: `authMiddleware` → `requireActiveUser` → 
 | Feature | Frontend | Backend | Notes |
 |---------|----------|---------|-------|
 | Dashboard | `app/dashboard/page.tsx` | `GET /events`, `GET /inventory/dashboard`, `GET /users` | Permission-gated widgets |
+| Analytics | `app/dashboard/analytics/page.tsx` | None yet | v1 is UI-only. Insights are derived from `mock-analytics-data.ts`. Planned future backend analytics integration. "Code Red" means blood type stock is critically below safe threshold. Includes Key Findings, Staff Highlights, Code Red History, Area Performance, Event Effectiveness, and Recommendations. |
 | Campaign mgmt | `app/dashboard/campaign/**` | `/api/v1/events/*` | No `campaigns` table |
 | Plotting calendar | `app/dashboard/plotting-calendars/page.tsx` | `/api/v1/plotting-calendars/*` | Single large page file |
 | My events | `app/dashboard/my-events/**` | `/api/v1/events/my-events`, `/:id/stats` | |
