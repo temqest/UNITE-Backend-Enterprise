@@ -471,6 +471,9 @@ class EventService {
             missing.push('Event date');
         if (!event.hosting_organization?.trim())
             missing.push('Hosting organization');
+        if (!event.coverage_area_boundary_id && !event.coverage_area_municipality) {
+            missing.push('Event Area (City / Municipality)');
+        }
         if (missing.length > 0) {
             return {
                 data: null,
