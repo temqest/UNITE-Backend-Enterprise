@@ -158,8 +158,9 @@ UNITE-Backend-Enterprise/
 | Item | Path |
 |------|------|
 | Page | `app/dashboard/page.tsx` |
-| API | `listEvents`, `getInventoryDashboard`, `listUsers` via `lib/api.ts` |
-| Notes | Summary cards; links to events/inventory/staff based on permissions |
+| Components | `components/dashboard/DashboardHeader.tsx`, `NeedsAttentionPanel.tsx`, `OperationsSummary.tsx`, `UpcomingEventsCard.tsx`, `InventoryRiskCard.tsx`, `CoverageSnapshotCard.tsx`, `TeamSnapshotCard.tsx`, `QuickActions.tsx`, `RecentActivityCard.tsx` |
+| API | `listEvents`, `getInventoryDashboard`, `listCoverageAreas`, `listUsers` via `lib/api.ts` |
+| Notes | Serves as an operational home page. Includes Needs Attention panel, metric summary cards, and snapshots for upcoming events, inventory risks, coverage progress, and team count based on permissions. |
 
 ### Campaign Management (`/dashboard/campaign`)
 
