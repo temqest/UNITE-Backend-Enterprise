@@ -8,6 +8,7 @@ import {
   listStaffController,
   updateStaffManagementController,
 } from '../../controllers/users/staff-management.controller';
+import { getStaffDetailController } from '../../controllers/users/staff-detail.controller';
 import { signupAdminController, signupStaffController } from '../../controllers/users/signup.controller';
 import {
   validateGetProfile,
@@ -78,6 +79,7 @@ usersRouter.post('/approve-staff', authMiddleware, requireActiveUser, requireOrg
 usersRouter.patch('/settings', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
 usersRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffListQuery), 'query'), asyncHandler(listStaffController as any));
 usersRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffCreate)), asyncHandler(createStaffManagementController as any));
+usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
 usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
 usersRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(deleteStaffManagementController as any));
 

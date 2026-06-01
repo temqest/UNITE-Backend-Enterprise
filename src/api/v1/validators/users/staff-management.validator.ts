@@ -33,6 +33,7 @@ export const staffCreateSchema = z.object({
   province: optionalText,
   district: optionalText,
   municipality: optionalText,
+  geographic_designations: z.array(z.record(z.string(), z.any())).optional(),
 });
 
 export const staffUpdateSchema = z.object({
@@ -43,6 +44,7 @@ export const staffUpdateSchema = z.object({
   sector: sectorSchema.optional(),
   phone_number: optionalText,
   geographic_area: optionalText,
+  geographic_designations: z.array(z.record(z.string(), z.any())).optional(),
   province: optionalText,
   district: optionalText,
   municipality: optionalText,
@@ -61,49 +63,25 @@ function formatZodError(error: z.ZodError) {
 }
 
 export const validateUserIdParam = (data: unknown) => {
-  try {
-    const result = userIdParamSchema.parse(data);
-    return { success: true as const, data: result };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false as const, error: formatZodError(error) };
-    }
-    return { success: false as const, error: 'Validation failed' };
-  }
+  const result = userIdParamSchema.safeParse(data);
+  if (result.success) return { success: true as const, data: result.data };
+  return { success: false as const, error: formatZodError(result.error) };
 };
 
 export const validateStaffListQuery = (data: unknown) => {
-  try {
-    const result = staffListQuerySchema.parse(data);
-    return { success: true as const, data: result };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false as const, error: formatZodError(error) };
-    }
-    return { success: false as const, error: 'Validation failed' };
-  }
+  const result = staffListQuerySchema.safeParse(data);
+  if (result.success) return { success: true as const, data: result.data };
+  return { success: false as const, error: formatZodError(result.error) };
 };
 
 export const validateStaffCreate = (data: unknown) => {
-  try {
-    const result = staffCreateSchema.parse(data);
-    return { success: true as const, data: result };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false as const, error: formatZodError(error) };
-    }
-    return { success: false as const, error: 'Validation failed' };
-  }
+  const result = staffCreateSchema.safeParse(data);
+  if (result.success) return { success: true as const, data: result.data };
+  return { success: false as const, error: formatZodError(result.error) };
 };
 
 export const validateStaffUpdate = (data: unknown) => {
-  try {
-    const result = staffUpdateSchema.parse(data);
-    return { success: true as const, data: result };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false as const, error: formatZodError(error) };
-    }
-    return { success: false as const, error: 'Validation failed' };
-  }
+  const result = staffUpdateSchema.safeParse(data);
+  if (result.success) return { success: true as const, data: result.data };
+  return { success: false as const, error: formatZodError(result.error) };
 };

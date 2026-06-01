@@ -148,6 +148,7 @@ UNITE-Backend-Enterprise/
 | `/dashboard/calendar` | `app/dashboard/calendar/page.tsx` | Internal event calendar view with custom compact event pills and status/source summary badges |
 | `/dashboard/inventory` | `app/dashboard/inventory/page.tsx` | Inventory management |
 | `/dashboard/staff` | `app/dashboard/staff/page.tsx` | Staff management |
+| `/dashboard/staff/[staffId]` | `app/dashboard/staff/[staffId]/page.tsx` | Staff profile detail and event stats |
 | `/dashboard/settings` | `app/dashboard/settings/page.tsx` | Org/user settings |
 | `/donor/*` | `app/donor/**` | Donor landing, login, signup, events, dashboard |
 | `/map-debug` | `app/map-debug/page.tsx` | Mapbox debug (env-gated) |
@@ -264,10 +265,10 @@ See [campaign-event-flow.md](./campaign-event-flow.md) for statuses and public v
 
 | Item | Path |
 |------|------|
-| Page | `app/dashboard/staff/page.tsx` |
-| Table / modals | `components/staff/StaffTable.tsx`, `AddStaffModal.tsx`, `EditStaffModal.tsx`, `DeleteStaffModal.tsx`, `ReviewSignupModal.tsx` |
-| API | `listUsers`, `createUser`, `updateUser`, `deleteUser`, `reviewPendingSignup` |
-| Backend | `GET/POST/PATCH/DELETE /api/v1/users`, `POST /api/v1/users/approve-staff` |
+| Page | `app/dashboard/staff/page.tsx`, `app/dashboard/staff/[staffId]/page.tsx` |
+| Table / modals | `components/staff/StaffTable.tsx`, `AddStaffModal.tsx`, `EditStaffModal.tsx`, `DeleteStaffModal.tsx`, `ReviewSignupModal.tsx`, `StaffProfileHeader.tsx`, `StaffInfoCards.tsx`, `StaffEventsTable.tsx` |
+| API | `listUsers`, `createUser`, `updateUser`, `deleteUser`, `reviewPendingSignup`, `getStaffDetail` |
+| Backend | `GET/POST/PATCH/DELETE /api/v1/users`, `POST /api/v1/users/approve-staff`, `GET /api/v1/users/:id/detail` |
 
 ### Auth
 
@@ -419,8 +420,8 @@ Models live under `src/models/<domain>/` with `schema.sql`, `rls.sql`, `types.ts
 | | |
 |-|-|
 | **Path** | `src/models/users/` |
-| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `is_active` |
-| **Frontend** | Staff page, auth session, permissions |
+| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `geographic_area` (JSONB), `is_active` |
+| **Frontend** | Staff page, auth session, permissions, geographic designation |
 | **API** | `/api/v1/users`, `/api/v1/auth/me` |
 
 ### Event

@@ -197,9 +197,10 @@ export async function createStaffManagementController(req: Request, res: Respons
     };
 
     if (shouldSpecifyLocation) {
-      geographicArea.province = normalizeOptionalText(body.province) ?? null;
-      geographicArea.district = normalizeOptionalText(body.district) ?? null;
-      geographicArea.municipality = normalizeOptionalText(body.municipality) ?? null;
+      const incomingDesignations = body.geographic_designations;
+      if (Array.isArray(incomingDesignations) && incomingDesignations.length > 0) {
+        geographicArea.assigned_areas = incomingDesignations;
+      }
     }
 
     const roleType = normalizeOptionalText(body.role);
@@ -360,6 +361,12 @@ export async function updateStaffManagementController(req: Request, res: Respons
     const incomingArea = normalizeOptionalText(body.geographic_area);
     if (incomingArea !== undefined) {
       geographic.city = incomingArea;
+      shouldPatchGeographic = true;
+    }
+
+    const incomingDesignations = body.geographic_designations;
+    if (Array.isArray(incomingDesignations)) {
+      geographic.assigned_areas = incomingDesignations;
       shouldPatchGeographic = true;
     }
 
