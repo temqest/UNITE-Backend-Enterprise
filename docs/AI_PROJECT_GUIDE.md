@@ -139,6 +139,7 @@ UNITE-Backend-Enterprise/
 | `/unauthorized` | `app/unauthorized/page.tsx` | Permission denied |
 | `/events` | `app/events/page.tsx` | Public events (Needs verification: donor vs staff) |
 | `/dashboard` | `app/dashboard/page.tsx` | Main dashboard |
+| `/dashboard/analytics` | `app/dashboard/analytics/page.tsx` | Operations Analytics (v1 UI/Mock Data Only) |
 | `/dashboard/coverage-map` | `app/dashboard/coverage-map/page.tsx` | Donation coverage map |
 | `/dashboard/campaign` | `app/dashboard/campaign/page.tsx` | Campaign / event management |
 | `/dashboard/plotting-calendars` | `app/dashboard/plotting-calendars/page.tsx` | Plotting calendar admin + reserve |
@@ -147,6 +148,7 @@ UNITE-Backend-Enterprise/
 | `/dashboard/calendar` | `app/dashboard/calendar/page.tsx` | Internal event calendar view with custom compact event pills and status/source summary badges |
 | `/dashboard/inventory` | `app/dashboard/inventory/page.tsx` | Inventory management |
 | `/dashboard/staff` | `app/dashboard/staff/page.tsx` | Staff management |
+| `/dashboard/staff/[staffId]` | `app/dashboard/staff/[staffId]/page.tsx` | Staff profile detail and event stats |
 | `/dashboard/settings` | `app/dashboard/settings/page.tsx` | Org/user settings |
 | `/donor/*` | `app/donor/**` | Donor landing, login, signup, events, dashboard |
 | `/map-debug` | `app/map-debug/page.tsx` | Mapbox debug (env-gated) |
@@ -263,10 +265,10 @@ See [campaign-event-flow.md](./campaign-event-flow.md) for statuses and public v
 
 | Item | Path |
 |------|------|
-| Page | `app/dashboard/staff/page.tsx` |
-| Table / modals | `components/staff/StaffTable.tsx`, `AddStaffModal.tsx`, `EditStaffModal.tsx`, `DeleteStaffModal.tsx`, `ReviewSignupModal.tsx` |
-| API | `listUsers`, `createUser`, `updateUser`, `deleteUser`, `reviewPendingSignup` |
-| Backend | `GET/POST/PATCH/DELETE /api/v1/users`, `POST /api/v1/users/approve-staff` |
+| Page | `app/dashboard/staff/page.tsx`, `app/dashboard/staff/[staffId]/page.tsx` |
+| Table / modals | `components/staff/StaffTable.tsx`, `AddStaffModal.tsx`, `EditStaffModal.tsx`, `DeleteStaffModal.tsx`, `ReviewSignupModal.tsx`, `StaffProfileHeader.tsx`, `StaffInfoCards.tsx`, `StaffEventsTable.tsx` |
+| API | `listUsers`, `createUser`, `updateUser`, `deleteUser`, `reviewPendingSignup`, `getStaffDetail` |
+| Backend | `GET/POST/PATCH/DELETE /api/v1/users`, `POST /api/v1/users/approve-staff`, `GET /api/v1/users/:id/detail` |
 
 ### Auth
 
@@ -292,7 +294,7 @@ Auth is **not** temporary — hybrid Supabase + httpOnly refresh cookie is the c
 | Prefix | Route file | Notes |
 |--------|------------|-------|
 | `/auth` | `routes/auth/auth.routes.ts` | Login, refresh, me, logout, OTP, Google, password |
-| `/users` | `routes/users/users.routes.ts` | Staff CRUD, signup, profile, approve-staff |
+| `/users` | `routes/users/users.routes.ts` | Staff CRUD, signup, profile, approve-staff, upload/delete profile-picture |
 | `/events` | `routes/events/events.routes.ts` | Full event lifecycle; `POST /` rejects `creation_method: plotting_calendar` |
 | `/plotting-calendars` | `routes/plotting-calendars/plotting-calendars.routes.ts` | Calendar CRUD, availability, plot-event |
 | `/inventory` | `routes/inventory/inventory.routes.ts` | Dashboard, blood type detail, transactions |
@@ -377,6 +379,8 @@ See [auth.md](./auth.md). Middleware: `src/middelware/auth.middleware.ts`, `auth
 | Routes | `src/api/v1/routes/users/users.routes.ts` |
 | Model | `src/models/users/` |
 
+**Profile Pictures:** Handled via `POST /api/v1/users/:id/profile-picture` (multipart/form-data with `profile_picture`) and `DELETE /api/v1/users/:id/profile-picture`. Images are validated, resized, and converted to WebP by `sharp` before being stored in the Supabase bucket `profile-pictures` using `profile-picture.service.ts`. Maximum upload size is 5 MB. See [docs/profile-picture-upload.md](./profile-picture-upload.md) for security and performance details.
+
 All authenticated user routes use: `authMiddleware` → `requireActiveUser` → `requireOrgScope` → `authorize(permission)`.
 
 ---
@@ -386,6 +390,7 @@ All authenticated user routes use: `authMiddleware` → `requireActiveUser` → 
 | Feature | Frontend | Backend | Notes |
 |---------|----------|---------|-------|
 | Dashboard | `app/dashboard/page.tsx` | `GET /events`, `GET /inventory/dashboard`, `GET /users` | Permission-gated widgets |
+| Analytics | `app/dashboard/analytics/page.tsx` | None yet | v1 is UI-only. Insights are derived from `mock-analytics-data.ts`. Planned future backend analytics integration. "Code Red" means blood type stock is critically below safe threshold. Includes Key Findings, Staff Highlights, Code Red History, Area Performance, Event Effectiveness, and Recommendations. |
 | Campaign mgmt | `app/dashboard/campaign/**` | `/api/v1/events/*` | No `campaigns` table |
 | Plotting calendar | `app/dashboard/plotting-calendars/page.tsx` | `/api/v1/plotting-calendars/*` | Single large page file |
 | My events | `app/dashboard/my-events/**` | `/api/v1/events/my-events`, `/:id/stats` | |
@@ -417,8 +422,8 @@ Models live under `src/models/<domain>/` with `schema.sql`, `rls.sql`, `types.ts
 | | |
 |-|-|
 | **Path** | `src/models/users/` |
-| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `is_active` |
-| **Frontend** | Staff page, auth session, permissions |
+| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `geographic_area` (JSONB), `is_active`, `profile_picture_url`, `profile_picture_path` |
+| **Frontend** | Staff page, auth session, permissions, geographic designation |
 | **API** | `/api/v1/users`, `/api/v1/auth/me` |
 
 ### Event
@@ -501,7 +506,7 @@ Never commit real secrets. Do not document actual values here.
 | `SESSION_MAX_AGE_DAYS`, `AUTH_REFRESH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE` | Refresh cookie |
 | `ACCESS_TOKEN_EXPIRES_IN` | Documented target; Supabase dashboard controls JWT |
 | `AUTH_*_RATE_LIMIT_*` | Login / OTP rate limits |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, etc. | Supabase |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET_PROFILE_PICTURES` | Supabase |
 | `BREVO_*`, `DEFAULT_EMAIL_FROM` | Email |
 | `CHAT_*` | Chat storage limits |
 | `NOTIFICATION_*` | Notification queue / rate limits |

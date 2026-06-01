@@ -1,4 +1,5 @@
 import { supabaseServer } from '../../../../lib/supabase/supabase.client';
+import { attachSignedProfileUrls } from '../../../../services/users/profile-picture.service';
 import {
   validateGetProfile,
   validateProfileUpdate,
@@ -100,7 +101,8 @@ export async function getProfileController(req: Request, res: Response): Promise
       return;
     }
 
-    res.status(200).json({ success: true, data });
+    const finalData = await attachSignedProfileUrls(data as any);
+    res.status(200).json({ success: true, data: finalData });
   } catch (error) {
     sendError(res, 500, {
       code: 'GET_PROFILE_ERROR',
@@ -189,7 +191,8 @@ export async function updateProfileController(req: Request, res: Response): Prom
       return;
     }
 
-    res.status(200).json({ success: true, data });
+    const finalData = await attachSignedProfileUrls(data as any);
+    res.status(200).json({ success: true, data: finalData });
   } catch (error) {
     sendError(res, 500, {
       code: 'UPDATE_PROFILE_ERROR',

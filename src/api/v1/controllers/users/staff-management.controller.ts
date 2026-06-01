@@ -2,6 +2,7 @@ import { supabaseServer } from '../../../../lib/supabase/supabase.client';
 import { UserService } from '../../../../services/users/user.service';
 import { notificationService } from '../../../../services/notifications/notification.service';
 import { resolveCanonicalRole, ROLE_DEFAULT_PERMISSIONS } from '../../../../services/auth/rbac.constants';
+import { attachSignedProfileUrls } from '../../../../services/users/profile-picture.service';
 
 interface UserRole {
   type?: string;
@@ -157,7 +158,8 @@ export async function listStaffController(req: Request, res: Response): Promise<
     }
 
     const users = Array.isArray(data) ? data.map((user) => shapeStaffResponse(user as UserRowLike)) : [];
-    res.status(200).json({ success: true, data: users });
+    const usersWithUrls = await attachSignedProfileUrls(users as any);
+    res.status(200).json({ success: true, data: usersWithUrls });
   } catch (error) {
     sendError(res, 500, {
       code: 'STAFF_LIST_ERROR',
@@ -197,9 +199,10 @@ export async function createStaffManagementController(req: Request, res: Respons
     };
 
     if (shouldSpecifyLocation) {
-      geographicArea.province = normalizeOptionalText(body.province) ?? null;
-      geographicArea.district = normalizeOptionalText(body.district) ?? null;
-      geographicArea.municipality = normalizeOptionalText(body.municipality) ?? null;
+      const incomingDesignations = body.geographic_designations;
+      if (Array.isArray(incomingDesignations) && incomingDesignations.length > 0) {
+        geographicArea.assigned_areas = incomingDesignations;
+      }
     }
 
     const roleType = normalizeOptionalText(body.role);
@@ -240,7 +243,8 @@ export async function createStaffManagementController(req: Request, res: Respons
       });
     }
 
-    res.status(201).json({ success: true, data: shapeStaffResponse(result.data.user as unknown as UserRowLike) });
+    const finalUser = await attachSignedProfileUrls(shapeStaffResponse(result.data.user as unknown as UserRowLike) as any);
+    res.status(201).json({ success: true, data: finalUser });
   } catch (error) {
     sendError(res, 500, {
       code: 'CREATE_STAFF_ERROR',
@@ -269,7 +273,7 @@ export async function updateStaffManagementController(req: Request, res: Respons
       return;
     }
 
-    const existingQuery = supabaseServer.from('users').select('*').eq('id', targetUserId).eq('org_id', req.user.org_id).maybeSingle();
+    const existingQuery = supabaseServer.from('users').select('*').eq('id', targetUserId).maybeSingle();
     const { data: existingUserRaw, error: existingError } = await existingQuery;
     const existingUser = existingUserRaw as UserRowLike | null;
     if (existingError || !existingUser) {
@@ -278,6 +282,23 @@ export async function updateStaffManagementController(req: Request, res: Respons
         message: 'Staff user not found.',
         details: existingError,
       });
+      return;
+    }
+
+    // Implement granular edit permissions
+    const actorRole = req.user.role?.type || '';
+    const targetRoleObj = typeof existingUser.role === 'string' ? existingUser.role : existingUser.role?.type;
+    const targetRole = String(targetRoleObj || '');
+    const isSelf = targetUserId === req.user.id;
+
+    let allowed = false;
+    if (isSelf) allowed = true;
+    else if (actorRole === 'super_admin') allowed = true;
+    else if (actorRole === 'admin') allowed = targetRole !== 'admin' && targetRole !== 'super_admin';
+    else if (actorRole === 'coordinator') allowed = targetRole === 'stakeholder';
+
+    if (!allowed) {
+      sendError(res, 403, { code: 'FORBIDDEN', message: 'You do not have permission to update this user.' });
       return;
     }
 
@@ -363,12 +384,19 @@ export async function updateStaffManagementController(req: Request, res: Respons
       shouldPatchGeographic = true;
     }
 
+    const incomingDesignations = body.geographic_designations;
+    if (Array.isArray(incomingDesignations)) {
+      geographic.assigned_areas = incomingDesignations;
+      shouldPatchGeographic = true;
+    }
+
     if (shouldPatchGeographic) {
       patch.geographic_area = hasOwnKeys(geographic) ? geographic : null;
     }
 
     if (Object.keys(patch).length === 0) {
-      res.status(200).json({ success: true, data: shapeStaffResponse(existingUser as UserRowLike) });
+      const finalUser = await attachSignedProfileUrls(shapeStaffResponse(existingUser as UserRowLike) as any);
+      res.status(200).json({ success: true, data: finalUser });
       return;
     }
 
@@ -391,7 +419,8 @@ export async function updateStaffManagementController(req: Request, res: Respons
       return;
     }
 
-    res.status(200).json({ success: true, data: shapeStaffResponse(updated as UserRowLike) });
+    const finalUser = await attachSignedProfileUrls(shapeStaffResponse(updated as UserRowLike) as any);
+    res.status(200).json({ success: true, data: finalUser });
   } catch (error) {
     sendError(res, 500, {
       code: 'USER_UPDATE_ERROR',

@@ -1,4 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { approveStaffController } from '../../controllers/users/approval.controller';
 import { getProfileController, updateProfileController } from '../../controllers/users/profile.controller';
 import { updateUserSettingsController } from '../../controllers/users/settings.controller';
@@ -8,6 +10,8 @@ import {
   listStaffController,
   updateStaffManagementController,
 } from '../../controllers/users/staff-management.controller';
+import { getStaffDetailController } from '../../controllers/users/staff-detail.controller';
+import { uploadProfilePictureController, deleteProfilePictureController } from '../../controllers/users/profile-picture.controller';
 import { signupAdminController, signupStaffController } from '../../controllers/users/signup.controller';
 import {
   validateGetProfile,
@@ -55,6 +59,26 @@ function toValidator(validateFn: (payload: unknown) => unknown): { validate: (pa
 }
 
 const usersRouter = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+});
+
+const profilePictureRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many profile picture uploads from this IP, please try again after 15 minutes.',
+    },
+  },
+});
 
 usersRouter.post('/signup', validateMiddleware(toValidator(validateSignup)), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -78,8 +102,12 @@ usersRouter.post('/approve-staff', authMiddleware, requireActiveUser, requireOrg
 usersRouter.patch('/settings', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
 usersRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffListQuery), 'query'), asyncHandler(listStaffController as any));
 usersRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffCreate)), asyncHandler(createStaffManagementController as any));
-usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
+usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
+usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
 usersRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(deleteStaffManagementController as any));
+
+usersRouter.post('/:id/profile-picture', profilePictureRateLimiter, authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateUserIdParam), 'params'), upload.single('profile_picture'), asyncHandler(uploadProfilePictureController as any));
+usersRouter.delete('/:id/profile-picture', authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(deleteProfilePictureController as any));
 
 export { usersRouter };
 export default usersRouter;

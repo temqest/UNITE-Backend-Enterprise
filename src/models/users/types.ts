@@ -21,6 +21,8 @@ export interface UserRow {
   last_name: string;
   role: UserRole;
   geographic_area: GeographicArea | null;
+  profile_picture_url?: string | null;
+  profile_picture_path?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -34,6 +36,8 @@ export interface UserCreateInput {
   last_name: string;
   role: UserRole;
   geographic_area?: GeographicArea | null;
+  profile_picture_url?: string | null;
+  profile_picture_path?: string | null;
   is_active?: boolean;
 }
 
@@ -43,5 +47,7 @@ export interface UserUpdateInput {
   last_name?: string;
   role?: UserRole;
   geographic_area?: GeographicArea | null;
+  profile_picture_url?: string | null;
+  profile_picture_path?: string | null;
   is_active?: boolean;
 }
