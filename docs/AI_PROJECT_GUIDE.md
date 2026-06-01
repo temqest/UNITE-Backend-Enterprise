@@ -294,7 +294,7 @@ Auth is **not** temporary — hybrid Supabase + httpOnly refresh cookie is the c
 | Prefix | Route file | Notes |
 |--------|------------|-------|
 | `/auth` | `routes/auth/auth.routes.ts` | Login, refresh, me, logout, OTP, Google, password |
-| `/users` | `routes/users/users.routes.ts` | Staff CRUD, signup, profile, approve-staff |
+| `/users` | `routes/users/users.routes.ts` | Staff CRUD, signup, profile, approve-staff, upload/delete profile-picture |
 | `/events` | `routes/events/events.routes.ts` | Full event lifecycle; `POST /` rejects `creation_method: plotting_calendar` |
 | `/plotting-calendars` | `routes/plotting-calendars/plotting-calendars.routes.ts` | Calendar CRUD, availability, plot-event |
 | `/inventory` | `routes/inventory/inventory.routes.ts` | Dashboard, blood type detail, transactions |
@@ -379,6 +379,8 @@ See [auth.md](./auth.md). Middleware: `src/middelware/auth.middleware.ts`, `auth
 | Routes | `src/api/v1/routes/users/users.routes.ts` |
 | Model | `src/models/users/` |
 
+**Profile Pictures:** Handled via `POST /api/v1/users/:id/profile-picture` (multipart/form-data with `profile_picture`) and `DELETE /api/v1/users/:id/profile-picture`. Images are validated, resized, and converted to WebP by `sharp` before being stored in the Supabase bucket `profile-pictures` using `profile-picture.service.ts`. Maximum upload size is 5 MB. See [docs/profile-picture-upload.md](./profile-picture-upload.md) for security and performance details.
+
 All authenticated user routes use: `authMiddleware` → `requireActiveUser` → `requireOrgScope` → `authorize(permission)`.
 
 ---
@@ -420,7 +422,7 @@ Models live under `src/models/<domain>/` with `schema.sql`, `rls.sql`, `types.ts
 | | |
 |-|-|
 | **Path** | `src/models/users/` |
-| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `geographic_area` (JSONB), `is_active` |
+| **Key fields** | `id`, `org_id`, `auth_id`, `email`, `role` (JSONB: `type`, `permissions`), `geographic_area` (JSONB), `is_active`, `profile_picture_url`, `profile_picture_path` |
 | **Frontend** | Staff page, auth session, permissions, geographic designation |
 | **API** | `/api/v1/users`, `/api/v1/auth/me` |
 
@@ -504,7 +506,7 @@ Never commit real secrets. Do not document actual values here.
 | `SESSION_MAX_AGE_DAYS`, `AUTH_REFRESH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE` | Refresh cookie |
 | `ACCESS_TOKEN_EXPIRES_IN` | Documented target; Supabase dashboard controls JWT |
 | `AUTH_*_RATE_LIMIT_*` | Login / OTP rate limits |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, etc. | Supabase |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET_PROFILE_PICTURES` | Supabase |
 | `BREVO_*`, `DEFAULT_EMAIL_FROM` | Email |
 | `CHAT_*` | Chat storage limits |
 | `NOTIFICATION_*` | Notification queue / rate limits |

@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     last_name TEXT NOT NULL,
     role JSONB NOT NULL,
     geographic_area JSONB,
+    profile_picture_url TEXT,
+    profile_picture_path TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

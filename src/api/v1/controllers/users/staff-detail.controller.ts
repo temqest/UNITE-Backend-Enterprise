@@ -1,4 +1,5 @@
 import { supabaseServer } from '../../../../lib/supabase/supabase.client';
+import { attachSignedProfileUrls } from '../../../../services/users/profile-picture.service';
 
 interface Request {
   params?: Record<string, string | undefined>;
@@ -53,7 +54,7 @@ export async function getStaffDetailController(req: Request, res: Response): Pro
       .select('*')
       .eq('id', targetUserId)
       .eq('org_id', req.user.org_id)
-      .maybeSingle();
+      .maybeSingle<any>();
 
     if (userError || !userRaw) {
       sendError(res, 404, {
@@ -218,12 +219,15 @@ export async function getStaffDetailController(req: Request, res: Response): Pro
       district,
       municipality,
       created_at: userRaw.created_at,
+      profile_picture_path: userRaw.profile_picture_path,
     };
+
+    const finalStaffData = await attachSignedProfileUrls(staffData as any);
 
     res.status(200).json({
       success: true,
       data: {
-        staff: staffData,
+        staff: finalStaffData,
         stats,
         events: enrichedEvents,
         recent_activity: enrichedEvents.slice(0, 5) // Send top 5 events as proxy for recent activity
