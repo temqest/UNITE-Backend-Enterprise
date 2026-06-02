@@ -432,7 +432,7 @@ Models live under `src/models/<domain>/` with `schema.sql`, `rls.sql`, `types.ts
 | | |
 |-|-|
 | **Path** | `src/models/events/` — `events` table |
-| **Key fields** | `status`, `setup_status`, `creation_method`, `plotting_calendar_id`, `type`, `event_date`, `start_time`, `end_time`, `extra_data`, `visibility`, `is_public` |
+| **Key fields** | `status`, `setup_status`, `creation_method`, `plotting_calendar_id`, `type`, `event_date`, `start_time`, `end_time`, `extra_data`, `visibility`, `is_public`, `latitude`, `longitude`, `map_location_label`, `map_place_id`, `map_address` |
 | **Statuses** | `draft`, `plotted`, `needs_details`, `scheduled`, `published`, `ongoing`, `completed`, `cancelled` |
 | **Frontend** | Campaign, my-events, calendar, plotting reserve |
 | **API** | `/api/v1/events/*` |

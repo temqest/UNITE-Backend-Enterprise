@@ -97,6 +97,11 @@ export interface EventRow {
   coverage_area_normalized_key: string | null;
   created_by: string | null;
   updated_by: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  map_location_label: string | null;
+  map_place_id: string | null;
+  map_address: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +136,11 @@ export interface EventCreateInput {
   coverage_area_normalized_key?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  map_location_label?: string | null;
+  map_place_id?: string | null;
+  map_address?: string | null;
 }
 
 export interface EventUpdateInput {
@@ -166,6 +176,11 @@ export interface EventUpdateInput {
   coverage_area_barangay?: string | null;
   coverage_area_normalized_key?: string | null;
   updated_by?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  map_location_label?: string | null;
+  map_place_id?: string | null;
+  map_address?: string | null;
 }
 
 export type EventStaffRole = 'lead' | 'coordinator' | 'staff' | 'volunteer';
