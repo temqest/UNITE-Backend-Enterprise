@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlottingCalendarService = void 0;
+exports.generatePlottingCalendarAccessCode = generatePlottingCalendarAccessCode;
 const crypto_1 = require("crypto");
 const zod_1 = require("zod");
 const event_types_1 = require("./event.types");
@@ -181,6 +182,7 @@ function normalizeCalendarRow(row) {
         allowed_user_ids: Array.isArray(row.allowed_user_ids) ? row.allowed_user_ids.map(String) : [],
         allowed_organization_ids: Array.isArray(row.allowed_organization_ids) ? row.allowed_organization_ids.map(String) : [],
         share_token: typeof row.share_token === 'string' ? row.share_token : null,
+        public_access_code: typeof row.public_access_code === 'string' ? row.public_access_code : undefined,
         expires_at: typeof row.expires_at === 'string' ? row.expires_at : null,
         status: String(row.status || 'active'),
         created_by: typeof row.created_by === 'string' ? row.created_by : null,
@@ -236,6 +238,15 @@ function isPlottingCalendarAccessTypeConstraintError(error) {
     const hint = typeof candidate.hint === 'string' ? candidate.hint : '';
     const combined = `${String(code ?? '')} ${message} ${details} ${hint}`;
     return combined.includes('23514') && combined.includes('plotting_calendars_access_type_check');
+}
+function generatePlottingCalendarAccessCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude O, 0, I, 1
+    let code = '';
+    const bytes = (0, crypto_1.randomBytes)(6);
+    for (let i = 0; i < 6; i++) {
+        code += chars[bytes[i] % chars.length];
+    }
+    return code;
 }
 class PlottingCalendarService {
     supabase;
@@ -406,16 +417,24 @@ class PlottingCalendarService {
                     error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'You can only create calendars in your own organization.'),
                 };
             }
+            const accessType = parsed.access_type ?? 'organization_link';
+            let generatedAccessCode;
+            let public_access_code;
+            if (accessType === 'organization_link' || accessType === 'share_token') {
+                generatedAccessCode = generatePlottingCalendarAccessCode();
+                public_access_code = generatedAccessCode;
+            }
             const { data, error } = await this.supabase
                 .from('plotting_calendars')
                 .insert({
                 ...parsed,
                 created_by: parsed.created_by ?? actor.id,
-                access_type: parsed.access_type ?? 'organization_link',
+                access_type: accessType,
                 status: parsed.status ?? 'active',
                 allowed_user_ids: parsed.allowed_user_ids ?? [],
                 allowed_organization_ids: parsed.allowed_organization_ids ?? [],
-                share_token: resolveShareToken(parsed.access_type ?? 'organization_link', parsed.share_token),
+                share_token: resolveShareToken(accessType, parsed.share_token),
+                public_access_code,
             })
                 .select('*')
                 .single();
@@ -450,7 +469,7 @@ class PlottingCalendarService {
                     replace_existing: true,
                 });
             }
-            return { data: calendar, error: null };
+            return { data: { ...calendar, generated_access_code: generatedAccessCode }, error: null };
         }
         catch (error) {
             return {
@@ -549,6 +568,38 @@ class PlottingCalendarService {
             };
         }
         return { data: true, error: null };
+    }
+    async regenerateAccessCode(actor, calendarId) {
+        if (!this.canManage(actor)) {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'You do not have permission to manage plotting calendars.'),
+            };
+        }
+        const existingResult = await this.getCalendar(actor, calendarId);
+        if (existingResult.error || !existingResult.data) {
+            return { data: null, error: existingResult.error };
+        }
+        const calendar = existingResult.data;
+        if (calendar.access_type !== 'organization_link' && calendar.access_type !== 'share_token') {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_NO_SHARE_LINK', 'This plotting calendar does not use a share link.'),
+            };
+        }
+        const generated = generatePlottingCalendarAccessCode();
+        const { error } = await this.supabase
+            .from('plotting_calendars')
+            .update({ public_access_code: generated })
+            .eq('id', calendarId)
+            .eq('org_id', actor.org_id);
+        if (error) {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_REGENERATE_CODE_FAILED', 'Failed to regenerate access code.', error),
+            };
+        }
+        return { data: { code: generated }, error: null };
     }
     async getAvailability(actor, calendarId, range = {}) {
         try {

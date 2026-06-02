@@ -360,7 +360,7 @@ Deprecated approve/reject/reschedule may return `410 Gone` — see [campaign-eve
 
 **Access checks:** `hasCalendarAccess()` in `plotting-calendar.service.ts` — same org, `events.read` or staff role; managers bypass list restrictions; otherwise `access_type` + allow-lists.
 
-**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. Unauthenticated public plotting routes are available under `/api/v1/plotting-calendars/share/*`.
+**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. Unauthenticated public plotting routes are available under `/api/v1/plotting-calendars/share/*`. Public share links are protected by a cryptographically secure 6-character access code (stored as a hash) that users must enter to view availability or plot events.
 
 ### Auth module
 
@@ -400,7 +400,7 @@ All authenticated user routes use: `authMiddleware` → `requireActiveUser` → 
 | Inventory | `app/dashboard/inventory/page.tsx` | `/api/v1/inventory/*` | |
 | Staff | `app/dashboard/staff/**` | `/api/v1/users/*` | |
 | Settings | `app/dashboard/settings/page.tsx` | `/api/v1/settings/*` | |
-| Donor portal | `app/donor/**` | `/api/v1/donor/*` | |
+| Donor portal | `app/donor/**`, `components/donor/DonorEventsPageClient.tsx` | `/api/v1/donor/*` | Dashboard (impact summary, readiness, upcoming, history, achievements, recommended events), Events browse (map-first two-column layout with Mapbox markers and fallback coordinate mapping, search/filter/sort, skeleton loading). Events page is server→client split for Mapbox token. |
 | Auth | `app/auth/**`, `components/auth/**` | `/api/v1/auth/*` | httpOnly refresh cookie |
 
 ---

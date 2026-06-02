@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getProfileController = getProfileController;
 exports.updateProfileController = updateProfileController;
 const supabase_client_1 = require("../../../../lib/supabase/supabase.client");
+const profile_picture_service_1 = require("../../../../services/users/profile-picture.service");
 const users_1 = require("../../validators/users");
 function sendError(res, statusCode, error) {
     res.status(statusCode).json({ success: false, error });
@@ -60,7 +61,8 @@ async function getProfileController(req, res) {
             });
             return;
         }
-        res.status(200).json({ success: true, data });
+        const finalData = await (0, profile_picture_service_1.attachSignedProfileUrls)(data);
+        res.status(200).json({ success: true, data: finalData });
     }
     catch (error) {
         sendError(res, 500, {
@@ -142,7 +144,8 @@ async function updateProfileController(req, res) {
             });
             return;
         }
-        res.status(200).json({ success: true, data });
+        const finalData = await (0, profile_picture_service_1.attachSignedProfileUrls)(data);
+        res.status(200).json({ success: true, data: finalData });
     }
     catch (error) {
         sendError(res, 500, {

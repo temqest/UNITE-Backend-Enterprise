@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
     allowed_user_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     allowed_organization_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     share_token TEXT,
+    public_access_code TEXT,
     expires_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'active',
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,

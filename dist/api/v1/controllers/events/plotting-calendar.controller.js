@@ -5,6 +5,7 @@ exports.getPlottingCalendarController = getPlottingCalendarController;
 exports.createPlottingCalendarController = createPlottingCalendarController;
 exports.updatePlottingCalendarController = updatePlottingCalendarController;
 exports.deletePlottingCalendarController = deletePlottingCalendarController;
+exports.regeneratePlottingCalendarAccessCodeController = regeneratePlottingCalendarAccessCodeController;
 exports.getPlottingCalendarAvailableSlotsController = getPlottingCalendarAvailableSlotsController;
 exports.getPlottingCalendarAvailabilityController = getPlottingCalendarAvailabilityController;
 exports.savePlottingCalendarAvailabilityController = savePlottingCalendarAvailabilityController;
@@ -181,6 +182,27 @@ async function deletePlottingCalendarController(req, res) {
     }
     catch (error) {
         sendError(res, 500, 'PLOTTING_CALENDAR_DELETE_ERROR', 'Unexpected error while deleting plotting calendar.', error);
+    }
+}
+async function regeneratePlottingCalendarAccessCodeController(req, res) {
+    try {
+        const user = requireAuthedOrgUser(req, res);
+        if (!user)
+            return;
+        const calendarId = req.params?.id;
+        if (!calendarId) {
+            sendError(res, 400, 'PLOTTING_CALENDAR_ID_REQUIRED', 'id path parameter is required.');
+            return;
+        }
+        const result = await plottingCalendarService.regenerateAccessCode(toActor(user), calendarId);
+        if (result.error || !result.data) {
+            sendError(res, 400, result.error?.code ?? 'PLOTTING_CALENDAR_REGENERATE_FAILED', result.error?.message ?? 'Failed to regenerate access code.', result.error?.details);
+            return;
+        }
+        res.status(200).json({ success: true, data: result.data });
+    }
+    catch (error) {
+        sendError(res, 500, 'PLOTTING_CALENDAR_REGENERATE_ERROR', 'Unexpected error while regenerating access code.', error);
     }
 }
 async function getPlottingCalendarAvailableSlotsController(req, res) {

@@ -37,6 +37,11 @@ const PlotEventPublicSchema = zod_1.z.object({
         });
     }
 });
+const VerifyAccessSchema = zod_1.z.object({
+    access_code: zod_1.z.string().trim().toUpperCase(),
+    full_name: zod_1.z.string().trim().min(2),
+    geographic_area: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()),
+});
 class PlottingCalendarShareService {
     supabase;
     eventService;
@@ -114,14 +119,58 @@ class PlottingCalendarShareService {
                 access_type: calendar.access_type,
                 max_events_per_date: calendar.max_events_per_date,
                 max_events_per_slot: calendar.max_events_per_slot,
+                is_protected: !!calendar.public_access_code,
             },
             error: null,
         };
     }
-    async getSharedCalendarAvailableSlots(shareToken, date) {
+    async verifyAccessCode(shareToken, input) {
+        try {
+            const parsed = VerifyAccessSchema.parse(input);
+            const calendarResult = await this.getCalendarByShareToken(shareToken);
+            if (calendarResult.error || !calendarResult.data) {
+                return { data: null, error: calendarResult.error };
+            }
+            const calendar = calendarResult.data;
+            if (!calendar.public_access_code) {
+                // If it doesn't have an access code, technically it's accessible without one?
+                // Let's assume we still return success.
+                return { data: { success: true, calendar: calendarResult.data }, error: null };
+            }
+            if (parsed.access_code.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+                };
+            }
+            return { data: { success: true, calendar: calendarResult.data }, error: null };
+        }
+        catch (error) {
+            return {
+                data: null,
+                error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_VERIFY_FAILED', 'Invalid access payload.', error),
+            };
+        }
+    }
+    async getSharedCalendarAvailableSlots(shareToken, date, accessCode) {
         const calendarResult = await this.getCalendarByShareToken(shareToken);
         if (calendarResult.error || !calendarResult.data) {
             return { data: null, error: calendarResult.error };
+        }
+        const calendar = calendarResult.data;
+        if (calendar.public_access_code) {
+            if (!accessCode) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to view availability.'),
+                };
+            }
+            if (accessCode.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+                return {
+                    data: null,
+                    error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+                };
+            }
         }
         const actor = this.createSystemActor(calendarResult.data);
         const availabilityResult = await this.plottingCalendarService.getAvailability(actor, calendarResult.data.id, {
@@ -135,11 +184,27 @@ class PlottingCalendarShareService {
     }
     async plotEventPublic(shareToken, input) {
         try {
+            const parsed = PlotEventPublicSchema.parse(input);
             const calendarResult = await this.getCalendarByShareToken(shareToken);
             if (calendarResult.error || !calendarResult.data) {
                 return { data: null, error: calendarResult.error };
             }
-            const parsed = PlotEventPublicSchema.parse(input);
+            const calendar = calendarResult.data;
+            if (calendar.public_access_code) {
+                const payloadAccessCode = input?.access_code;
+                if (!payloadAccessCode) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to plot events.'),
+                    };
+                }
+                if (String(payloadAccessCode).trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+                    return {
+                        data: null,
+                        error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+                    };
+                }
+            }
             const actor = this.createSystemActor(calendarResult.data);
             const extra_data = {
                 plotted_from_calendar: true,

@@ -8,6 +8,7 @@ const supabase_client_1 = require("../../../../lib/supabase/supabase.client");
 const user_service_1 = require("../../../../services/users/user.service");
 const notification_service_1 = require("../../../../services/notifications/notification.service");
 const rbac_constants_1 = require("../../../../services/auth/rbac.constants");
+const profile_picture_service_1 = require("../../../../services/users/profile-picture.service");
 const userService = new user_service_1.UserService(supabase_client_1.supabaseServer, notification_service_1.notificationService);
 function sendError(res, statusCode, error) {
     res.status(statusCode).json({ success: false, error });
@@ -102,7 +103,8 @@ async function listStaffController(req, res) {
             return;
         }
         const users = Array.isArray(data) ? data.map((user) => shapeStaffResponse(user)) : [];
-        res.status(200).json({ success: true, data: users });
+        const usersWithUrls = await (0, profile_picture_service_1.attachSignedProfileUrls)(users);
+        res.status(200).json({ success: true, data: usersWithUrls });
     }
     catch (error) {
         sendError(res, 500, {
@@ -138,9 +140,10 @@ async function createStaffManagementController(req, res) {
             options,
         };
         if (shouldSpecifyLocation) {
-            geographicArea.province = normalizeOptionalText(body.province) ?? null;
-            geographicArea.district = normalizeOptionalText(body.district) ?? null;
-            geographicArea.municipality = normalizeOptionalText(body.municipality) ?? null;
+            const incomingDesignations = body.geographic_designations;
+            if (Array.isArray(incomingDesignations) && incomingDesignations.length > 0) {
+                geographicArea.assigned_areas = incomingDesignations;
+            }
         }
         const roleType = normalizeOptionalText(body.role);
         if (!roleType) {
@@ -176,7 +179,8 @@ async function createStaffManagementController(req, res) {
                 },
             });
         }
-        res.status(201).json({ success: true, data: shapeStaffResponse(result.data.user) });
+        const finalUser = await (0, profile_picture_service_1.attachSignedProfileUrls)(shapeStaffResponse(result.data.user));
+        res.status(201).json({ success: true, data: finalUser });
     }
     catch (error) {
         sendError(res, 500, {
@@ -203,7 +207,7 @@ async function updateStaffManagementController(req, res) {
             });
             return;
         }
-        const existingQuery = supabase_client_1.supabaseServer.from('users').select('*').eq('id', targetUserId).eq('org_id', req.user.org_id).maybeSingle();
+        const existingQuery = supabase_client_1.supabaseServer.from('users').select('*').eq('id', targetUserId).maybeSingle();
         const { data: existingUserRaw, error: existingError } = await existingQuery;
         const existingUser = existingUserRaw;
         if (existingError || !existingUser) {
@@ -212,6 +216,24 @@ async function updateStaffManagementController(req, res) {
                 message: 'Staff user not found.',
                 details: existingError,
             });
+            return;
+        }
+        // Implement granular edit permissions
+        const actorRole = req.user.role?.type || '';
+        const targetRoleObj = typeof existingUser.role === 'string' ? existingUser.role : existingUser.role?.type;
+        const targetRole = String(targetRoleObj || '');
+        const isSelf = targetUserId === req.user.id;
+        let allowed = false;
+        if (isSelf)
+            allowed = true;
+        else if (actorRole === 'super_admin')
+            allowed = true;
+        else if (actorRole === 'admin')
+            allowed = targetRole !== 'admin' && targetRole !== 'super_admin';
+        else if (actorRole === 'coordinator')
+            allowed = targetRole === 'stakeholder';
+        if (!allowed) {
+            sendError(res, 403, { code: 'FORBIDDEN', message: 'You do not have permission to update this user.' });
             return;
         }
         const body = req.body ?? {};
@@ -281,11 +303,17 @@ async function updateStaffManagementController(req, res) {
             geographic.city = incomingArea;
             shouldPatchGeographic = true;
         }
+        const incomingDesignations = body.geographic_designations;
+        if (Array.isArray(incomingDesignations)) {
+            geographic.assigned_areas = incomingDesignations;
+            shouldPatchGeographic = true;
+        }
         if (shouldPatchGeographic) {
             patch.geographic_area = hasOwnKeys(geographic) ? geographic : null;
         }
         if (Object.keys(patch).length === 0) {
-            res.status(200).json({ success: true, data: shapeStaffResponse(existingUser) });
+            const finalUser = await (0, profile_picture_service_1.attachSignedProfileUrls)(shapeStaffResponse(existingUser));
+            res.status(200).json({ success: true, data: finalUser });
             return;
         }
         const usersTable = supabase_client_1.supabaseServer.from('users');
@@ -304,7 +332,8 @@ async function updateStaffManagementController(req, res) {
             });
             return;
         }
-        res.status(200).json({ success: true, data: shapeStaffResponse(updated) });
+        const finalUser = await (0, profile_picture_service_1.attachSignedProfileUrls)(shapeStaffResponse(updated));
+        res.status(200).json({ success: true, data: finalUser });
     }
     catch (error) {
         sendError(res, 500, {

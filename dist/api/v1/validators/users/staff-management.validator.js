@@ -63,6 +63,7 @@ exports.staffCreateSchema = z.object({
     province: optionalText,
     district: optionalText,
     municipality: optionalText,
+    geographic_designations: z.array(z.record(z.string(), z.any())).optional(),
 });
 exports.staffUpdateSchema = z.object({
     first_name: z.string().trim().min(1).max(50).optional(),
@@ -72,6 +73,7 @@ exports.staffUpdateSchema = z.object({
     sector: sectorSchema.optional(),
     phone_number: optionalText,
     geographic_area: optionalText,
+    geographic_designations: z.array(z.record(z.string(), z.any())).optional(),
     province: optionalText,
     district: optionalText,
     municipality: optionalText,
@@ -83,54 +85,30 @@ function formatZodError(error) {
     }));
 }
 const validateUserIdParam = (data) => {
-    try {
-        const result = exports.userIdParamSchema.parse(data);
-        return { success: true, data: result };
-    }
-    catch (error) {
-        if (error instanceof z.ZodError) {
-            return { success: false, error: formatZodError(error) };
-        }
-        return { success: false, error: 'Validation failed' };
-    }
+    const result = exports.userIdParamSchema.safeParse(data);
+    if (result.success)
+        return { success: true, data: result.data };
+    return { success: false, error: formatZodError(result.error) };
 };
 exports.validateUserIdParam = validateUserIdParam;
 const validateStaffListQuery = (data) => {
-    try {
-        const result = exports.staffListQuerySchema.parse(data);
-        return { success: true, data: result };
-    }
-    catch (error) {
-        if (error instanceof z.ZodError) {
-            return { success: false, error: formatZodError(error) };
-        }
-        return { success: false, error: 'Validation failed' };
-    }
+    const result = exports.staffListQuerySchema.safeParse(data);
+    if (result.success)
+        return { success: true, data: result.data };
+    return { success: false, error: formatZodError(result.error) };
 };
 exports.validateStaffListQuery = validateStaffListQuery;
 const validateStaffCreate = (data) => {
-    try {
-        const result = exports.staffCreateSchema.parse(data);
-        return { success: true, data: result };
-    }
-    catch (error) {
-        if (error instanceof z.ZodError) {
-            return { success: false, error: formatZodError(error) };
-        }
-        return { success: false, error: 'Validation failed' };
-    }
+    const result = exports.staffCreateSchema.safeParse(data);
+    if (result.success)
+        return { success: true, data: result.data };
+    return { success: false, error: formatZodError(result.error) };
 };
 exports.validateStaffCreate = validateStaffCreate;
 const validateStaffUpdate = (data) => {
-    try {
-        const result = exports.staffUpdateSchema.parse(data);
-        return { success: true, data: result };
-    }
-    catch (error) {
-        if (error instanceof z.ZodError) {
-            return { success: false, error: formatZodError(error) };
-        }
-        return { success: false, error: 'Validation failed' };
-    }
+    const result = exports.staffUpdateSchema.safeParse(data);
+    if (result.success)
+        return { success: true, data: result.data };
+    return { success: false, error: formatZodError(result.error) };
 };
 exports.validateStaffUpdate = validateStaffUpdate;

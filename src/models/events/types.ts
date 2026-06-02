@@ -280,6 +280,7 @@ export interface PlottingCalendarRow {
   allowed_user_ids: string[];
   allowed_organization_ids: string[];
   share_token: string | null;
+  public_access_code?: string | null;
   expires_at: string | null;
   status: PlottingCalendarStatus;
   created_by: string | null;
