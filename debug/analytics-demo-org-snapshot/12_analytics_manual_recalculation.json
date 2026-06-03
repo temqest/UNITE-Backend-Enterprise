@@ -1,0 +1,45 @@
+/* Manual Recalculation Output */
+{
+  "total_events": 7,
+  "completed_events": 3,
+  "events_needing_details": 0,
+  "collected_units": 1600,
+  "target_units": 550,
+  "coverage_progress": [
+    {
+      "area_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+      "area_name": "City of Iriga",
+      "target": 1000,
+      "collected": 1100,
+      "progress": 110
+    },
+    {
+      "area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
+      "area_name": "City of Naga",
+      "target": 2000,
+      "collected": 500,
+      "progress": 25
+    },
+    {
+      "area_id": "490c244c-2bbc-4bfa-b099-96e7b4fec6da",
+      "area_name": "Baao",
+      "target": 0,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "da65ce7a-9650-4cf7-bd74-f0bcdba346c0",
+      "area_name": "Pili",
+      "target": 1500,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "02501e88-f684-47fe-9b00-90a953fe76ec",
+      "area_name": "Camaligan",
+      "target": 0,
+      "collected": 0,
+      "progress": 0
+    }
+  ]
+}

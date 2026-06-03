@@ -5,6 +5,7 @@
     "test": "node --test test/**/*.test.js",
     "setup:chat": "ts-node scripts/setup-chat.ts",
     "events:clear:plotted": "ts-node scripts/clear-plotted-events.ts",
+    "debug:analytics-snapshot": "ts-node src/scripts/export-demo-org-analytics-snapshot.ts",
     "dev": "nodemon --watch src --ext js,ts,json --exec node src/server.js",
     "start": "node src/server.js"
   },

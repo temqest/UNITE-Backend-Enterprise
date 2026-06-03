@@ -1,0 +1,11 @@
+/* Organization and Demo User Context */
+{
+  "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+  "user_id": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+  "auth_id": "013ee486-c883-43bc-aa8b-7910cdfc4261",
+  "user_email": "demo@admin.com",
+  "user_full_name": "Patrick Villamer",
+  "role": "admin",
+  "geographic_area": "Camarines Sur",
+  "export_timestamp": "2026-06-03T07:28:29.097Z"
+}

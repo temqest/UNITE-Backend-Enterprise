@@ -25,6 +25,20 @@ export class AnalyticsService {
     const insights = await this.getOperationalInsights(orgId, filters, inventory, events, coverage);
     const keyFindings = await this.getKeyFindings(orgId, insights);
 
+    const dataQuality = {
+      uses_mock_data: false,
+      event_result_count: summary.completed_events,
+      coverage_result_count: coverage.progress_by_area.length,
+      inventory_transaction_count: inventory.movement_trend ? inventory.movement_trend.length : 0,
+      staff_activity_source: "assignments",
+      warnings: [] as string[]
+    };
+
+    if (summary.completed_events === 0) {
+      dataQuality.warnings.push("No completed events available for accurate performance tracking.");
+    }
+
+
     return {
       filters,
       summary,
@@ -35,6 +49,7 @@ export class AnalyticsService {
       staff,
       insights,
       key_findings: keyFindings,
+      data_quality: dataQuality,
       generated_at: new Date().toISOString()
     };
   }
@@ -94,10 +109,12 @@ export class AnalyticsService {
   }
 
   private async getEventAnalytics(orgId: string, filters: any) {
-    const { data: events } = await supabaseAdmin
+    const { data: events, error } = await supabaseAdmin
       .from('events')
-      .select('id, name, status, type, actual_collected_bags, creation_method, extra_data, event_date')
+      .select('id, title, status, type, actual_collected_bags, creation_method, extra_data, event_date')
       .eq('org_id', orgId);
+    
+    if (error) console.error("Error fetching events for analytics:", error);
 
     const byStatus: Record<string, number> = {};
     const byType: Record<string, number> = {};
@@ -221,7 +238,7 @@ export class AnalyticsService {
   private async getInventoryAnalytics(orgId: string, filters: any) {
     const { data: inventory } = await supabaseAdmin
       .from('blood_inventory')
-      .select('blood_type, quantity, min_threshold')
+      .select('blood_type, quantity, min_threshold, expiry_date, location')
       .eq('org_id', orgId);
 
     const aggregated: Record<string, { blood_type: string; quantity: number; min_threshold: number }> = {};
@@ -243,36 +260,108 @@ export class AnalyticsService {
     const lowStock = currentStock.filter((i: any) => i.quantity < i.min_threshold);
     const codeRed = currentStock.filter((i: any) => i.quantity <= Math.max(5, i.min_threshold * 0.3));
 
+    const now = new Date();
+    const nowIso = now.toISOString().slice(0, 10);
+    const soon7 = new Date(now);
+    soon7.setDate(soon7.getDate() + 7);
+    const soon7Iso = soon7.toISOString().slice(0, 10);
+
+    const expiringSoon = (inventory || [])
+      .filter((row: any) => row.quantity > 0 && !!row.expiry_date && row.expiry_date >= nowIso && row.expiry_date <= soon7Iso)
+      .map((row: any) => ({
+        blood_type: row.blood_type,
+        quantity: row.quantity,
+        expiry_date: row.expiry_date,
+        location: row.location,
+      }))
+      .sort((a: any, b: any) => (a.expiry_date > b.expiry_date ? 1 : -1));
+
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const { data: transactions } = await supabaseAdmin
+      .from('blood_inventory_transactions')
+      .select('direction, quantity, created_at')
+      .eq('org_id', orgId)
+      .gte('created_at', sixMonthsAgo.toISOString());
+
+    const monthlyMovement: Record<string, { added: number, used: number }> = {};
+    (transactions || []).forEach((t: any) => {
+      const d = new Date(t.created_at);
+      const month = d.toLocaleString('default', { month: 'short' });
+      if (!monthlyMovement[month]) monthlyMovement[month] = { added: 0, used: 0 };
+      if (t.direction === 'in') {
+        monthlyMovement[month].added += t.quantity;
+      } else {
+        monthlyMovement[month].used += t.quantity;
+      }
+    });
+
+    const movementTrend = Object.entries(monthlyMovement).map(([month, stats]) => ({
+      month,
+      added: stats.added,
+      used: stats.used
+    }));
+
     return {
       current_stock: currentStock,
       low_stock_blood_types: lowStock,
-      code_red_blood_types: codeRed
+      code_red_blood_types: codeRed,
+      expiring_soon_units: expiringSoon,
+      movement_trend: movementTrend
     };
   }
 
   private async getCoverageAnalytics(orgId: string, filters: any) {
     const { data: areas } = await supabaseAdmin
       .from('organization_coverage_areas')
-      .select('id, area_name, target_units')
+      .select('id, area_name, target_units, psgc_code, normalized_area_key')
       .eq('org_id', orgId)
       .eq('status', 'active');
 
-    // Mapped mock data for now since event matching by PSGC requires complex joins not fully implemented
-    const areaProgress = (areas || []).map((a: any) => ({
-      area: a.area_name,
-      target: a.target_units || 100,
-      collected: Math.floor(Math.random() * (a.target_units || 100)), // Placeholder
-      progress: 0
-    }));
+    const { data: events } = await supabaseAdmin
+      .from('events')
+      .select('status, actual_collected_bags, coverage_area_id, coverage_area_psgc_code, coverage_area_boundary_id, coverage_area_normalized_key')
+      .eq('org_id', orgId);
 
-    areaProgress.forEach((a: any) => {
-      a.progress = a.target > 0 ? Math.round((a.collected / a.target) * 100) : 0;
+    const areaProgress = (areas || []).map((area: any) => {
+      let collected = 0;
+      let completed_events = 0;
+      let upcoming_events = 0;
+      
+      (events || []).forEach((e: any) => {
+        const matches = 
+          (e.coverage_area_id && e.coverage_area_id === area.id) ||
+          (e.coverage_area_psgc_code && area.psgc_code && e.coverage_area_psgc_code === area.psgc_code) ||
+          (e.coverage_area_normalized_key && area.normalized_area_key && e.coverage_area_normalized_key === area.normalized_area_key);
+          
+        if (matches) {
+          if (e.status === 'completed') {
+            collected += (e.actual_collected_bags || 0);
+            completed_events++;
+          } else if (['scheduled', 'published', 'plotted', 'needs_details'].includes(e.status)) {
+            upcoming_events++;
+          }
+        }
+      });
+
+      const target = area.target_units || 0;
+      const progress = target > 0 ? Math.round((collected / target) * 100) : 0;
+
+      return {
+        area: area.area_name,
+        target,
+        collected,
+        progress,
+        completed_events,
+        upcoming_events
+      };
     });
 
     return {
       progress_by_area: areaProgress.sort((a: any, b: any) => b.progress - a.progress),
-      top_performing_areas: areaProgress.filter((a: any) => a.progress >= 80).slice(0, 3),
-      areas_needing_attention: areaProgress.filter((a: any) => a.progress < 50)
+      top_performing_areas: areaProgress.filter((a: any) => a.progress >= 80 && a.collected > 0).slice(0, 3),
+      areas_needing_attention: areaProgress.filter((a: any) => (a.progress < 50 || a.collected === 0) && a.target > 0)
     };
   }
 
@@ -294,12 +383,30 @@ export class AnalyticsService {
       }
     });
 
-    return {
-      staff_activity: Object.entries(userStats).map(([userId, stats]) => ({
-        staff_id: userId,
-        ...stats,
-        completion_rate: stats.assigned > 0 ? Math.round((stats.completed / stats.assigned) * 100) : 0
+    const staffActivity = Object.entries(userStats).map(([userId, stats]) => ({
+      staff_id: userId,
+      ...stats,
+      completion_rate: stats.assigned > 0 ? Math.round((stats.completed / stats.assigned) * 100) : 0
+    }));
+
+    const topPerformingStaff = [...staffActivity]
+      .filter(s => s.completed > 0)
+      .sort((a, b) => b.units - a.units)
+      .slice(0, 5);
+
+    const staffNeedingFollowUp = [...staffActivity]
+      .filter(s => s.assigned > s.completed)
+      .map(s => ({
+        ...s,
+        pending_events: s.assigned - s.completed
       }))
+      .sort((a, b) => b.pending_events - a.pending_events)
+      .slice(0, 5);
+
+    return {
+      staff_activity: staffActivity,
+      top_performing_staff: topPerformingStaff,
+      staff_needing_follow_up: staffNeedingFollowUp
     };
   }
 
