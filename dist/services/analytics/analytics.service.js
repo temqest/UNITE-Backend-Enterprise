@@ -85,11 +85,16 @@ class AnalyticsService {
     async getEventAnalytics(orgId, filters) {
         const { data: events } = await supabase_client_1.supabaseAdmin
             .from('events')
-            .select('id, status, type, actual_collected_bags, creation_method, extra_data')
+            .select('id, name, status, type, actual_collected_bags, creation_method, extra_data, event_date')
             .eq('org_id', orgId);
         const byStatus = {};
         const byType = {};
         const creationMethod = { manual: 0, plotting_calendar: 0 };
+        let totalCompleted = 0;
+        let withPostEventUpdate = 0;
+        let cancelledOrRejected = 0;
+        const targetVsActual = [];
+        const eventsNeedingAction = [];
         (events || []).forEach((e) => {
             byStatus[e.status] = (byStatus[e.status] || 0) + 1;
             byType[e.type] = (byType[e.type] || 0) + 1;
@@ -97,12 +102,69 @@ class AnalyticsService {
                 creationMethod.manual++;
             if (e.creation_method === 'plotting_calendar')
                 creationMethod.plotting_calendar++;
+            if (e.status === 'rejected' || e.status === 'cancelled') {
+                cancelledOrRejected++;
+            }
+            const eventName = e.name || e.title || `Event #${e.id.substring(0, 6)}`;
+            if (e.status === 'completed') {
+                totalCompleted++;
+                if (e.actual_collected_bags !== null && e.actual_collected_bags !== undefined) {
+                    withPostEventUpdate++;
+                }
+                else {
+                    eventsNeedingAction.push({
+                        id: e.id,
+                        name: eventName,
+                        reason: 'Missing post-event update',
+                        status: e.status
+                    });
+                }
+                const target = e.extra_data?.target_donation ? Number(e.extra_data.target_donation) : 0;
+                const collected = e.actual_collected_bags || 0;
+                targetVsActual.push({
+                    id: e.id,
+                    name: eventName,
+                    target_units: target,
+                    collected_units: collected,
+                    achievement_percentage: target > 0 ? Math.round((collected / target) * 100) : 0
+                });
+            }
+            else if (e.status === 'needs_details') {
+                eventsNeedingAction.push({
+                    id: e.id,
+                    name: eventName,
+                    reason: 'Missing required details',
+                    status: e.status
+                });
+            }
+            else if (e.status === 'approved') {
+                if (!e.extra_data?.target_donation) {
+                    eventsNeedingAction.push({
+                        id: e.id,
+                        name: eventName,
+                        reason: 'Upcoming without full setup',
+                        status: e.status
+                    });
+                }
+            }
         });
+        const topPerformingEvents = [...targetVsActual]
+            .sort((a, b) => b.collected_units - a.collected_units)
+            .slice(0, 5);
         return {
             events_by_status: Object.entries(byStatus).map(([status, count]) => ({ status, count })),
             events_by_type: Object.entries(byType).map(([type, count]) => ({ type, count })),
             creation_method: Object.entries(creationMethod).map(([method, count]) => ({ method, count })),
-            events_needing_details: byStatus['needs_details'] || 0
+            events_needing_details: byStatus['needs_details'] || 0,
+            target_vs_actual_by_event: targetVsActual,
+            top_performing_events: topPerformingEvents,
+            events_needing_action: eventsNeedingAction,
+            event_completion_quality: {
+                total_completed: totalCompleted,
+                with_post_event_update: withPostEventUpdate,
+                completion_update_rate: totalCompleted > 0 ? Math.round((withPostEventUpdate / totalCompleted) * 100) : 0,
+                cancelled_events: cancelledOrRejected
+            }
         };
     }
     async getCollectionPerformance(orgId, filters) {
@@ -118,10 +180,13 @@ class AnalyticsService {
                 return;
             const d = new Date(e.event_date);
             const month = d.toLocaleString('default', { month: 'short' });
-            monthly[month] = (monthly[month] || 0) + (e.actual_collected_bags || 0);
+            if (!monthly[month])
+                monthly[month] = { units: 0, completed_events: 0 };
+            monthly[month].units += (e.actual_collected_bags || 0);
+            monthly[month].completed_events += 1;
         });
-        const monthly_collections = Object.entries(monthly).map(([month, units]) => ({ month, units }));
-        let topMonth = { month: 'N/A', units: 0 };
+        const monthly_collections = Object.entries(monthly).map(([month, stats]) => ({ month, units: stats.units, completed_events: stats.completed_events }));
+        let topMonth = { month: 'N/A', units: 0, completed_events: 0 };
         monthly_collections.forEach((m) => {
             if (m.units > topMonth.units)
                 topMonth = m;

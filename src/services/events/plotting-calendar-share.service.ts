@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EventActorContext, ServiceResult } from './event.types';
 import { toServiceError } from './event.types';
@@ -38,6 +39,12 @@ const PlotEventPublicSchema = z.object({
       message: 'end_time must be later than start_time.',
     });
   }
+});
+
+const VerifyAccessSchema = z.object({
+  access_code: z.string().trim().toUpperCase(),
+  full_name: z.string().trim().min(2),
+  geographic_area: z.record(z.string(), z.unknown()),
 });
 
 export class PlottingCalendarShareService {
@@ -107,7 +114,7 @@ export class PlottingCalendarShareService {
     };
   }
 
-  async getSharedCalendar(shareToken: string): Promise<ServiceResult<Partial<PlottingCalendarRow>>> {
+  async getSharedCalendar(shareToken: string): Promise<ServiceResult<Partial<PlottingCalendarRow> & { is_protected?: boolean }>> {
     const result = await this.getCalendarByShareToken(shareToken);
     if (result.error || !result.data) {
       return { data: null, error: result.error };
@@ -128,15 +135,65 @@ export class PlottingCalendarShareService {
         access_type: calendar.access_type,
         max_events_per_date: calendar.max_events_per_date,
         max_events_per_slot: calendar.max_events_per_slot,
+        is_protected: !!calendar.public_access_code,
       },
       error: null,
     };
   }
 
-  async getSharedCalendarAvailableSlots(shareToken: string, date?: string): Promise<ServiceResult<any>> {
+  async verifyAccessCode(shareToken: string, input: unknown): Promise<ServiceResult<{ success: boolean; calendar: Partial<PlottingCalendarRow> }>> {
+    try {
+      const parsed = VerifyAccessSchema.parse(input);
+      const calendarResult = await this.getCalendarByShareToken(shareToken);
+      
+      if (calendarResult.error || !calendarResult.data) {
+        return { data: null, error: calendarResult.error };
+      }
+      
+      const calendar = calendarResult.data as PlottingCalendarRow & { public_access_code?: string | null };
+      
+      if (!calendar.public_access_code) {
+        // If it doesn't have an access code, technically it's accessible without one?
+        // Let's assume we still return success.
+        return { data: { success: true, calendar: calendarResult.data }, error: null };
+      }
+      
+      if (parsed.access_code.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+        return {
+          data: null,
+          error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+        };
+      }
+      
+      return { data: { success: true, calendar: calendarResult.data }, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: toServiceError('PLOTTING_CALENDAR_VERIFY_FAILED', 'Invalid access payload.', error),
+      };
+    }
+  }
+
+  async getSharedCalendarAvailableSlots(shareToken: string, date?: string, accessCode?: string): Promise<ServiceResult<any>> {
     const calendarResult = await this.getCalendarByShareToken(shareToken);
     if (calendarResult.error || !calendarResult.data) {
       return { data: null, error: calendarResult.error };
+    }
+
+    const calendar = calendarResult.data as PlottingCalendarRow & { public_access_code?: string | null };
+    if (calendar.public_access_code) {
+      if (!accessCode) {
+        return {
+          data: null,
+          error: toServiceError('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to view availability.'),
+        };
+      }
+      if (accessCode.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+        return {
+          data: null,
+          error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+        };
+      }
     }
 
     const actor = this.createSystemActor(calendarResult.data);
@@ -154,12 +211,29 @@ export class PlottingCalendarShareService {
 
   async plotEventPublic(shareToken: string, input: unknown): Promise<ServiceResult<any>> {
     try {
+      const parsed = PlotEventPublicSchema.parse(input);
       const calendarResult = await this.getCalendarByShareToken(shareToken);
       if (calendarResult.error || !calendarResult.data) {
         return { data: null, error: calendarResult.error };
       }
 
-      const parsed = PlotEventPublicSchema.parse(input);
+      const calendar = calendarResult.data as PlottingCalendarRow & { public_access_code?: string | null };
+      if (calendar.public_access_code) {
+        const payloadAccessCode = (input as any)?.access_code;
+        if (!payloadAccessCode) {
+          return {
+            data: null,
+            error: toServiceError('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to plot events.'),
+          };
+        }
+        if (String(payloadAccessCode).trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+          return {
+            data: null,
+            error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
+          };
+        }
+      }
+
       const actor = this.createSystemActor(calendarResult.data);
 
       const extra_data = {

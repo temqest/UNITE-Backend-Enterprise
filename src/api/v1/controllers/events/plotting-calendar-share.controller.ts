@@ -45,6 +45,26 @@ export async function getSharedPlottingCalendarController(req: Request, res: Res
   }
 }
 
+export async function verifySharedPlottingCalendarAccessController(req: Request, res: Response): Promise<void> {
+  try {
+    const shareToken = req.params?.shareToken;
+    if (!shareToken) {
+      sendError(res, 400, 'SHARE_TOKEN_REQUIRED', 'shareToken path parameter is required.');
+      return;
+    }
+
+    const result = await plottingCalendarShareService.verifyAccessCode(shareToken, req.body ?? {});
+    if (result.error || !result.data) {
+      sendError(res, 400, result.error?.code ?? 'PLOTTING_CALENDAR_VERIFY_FAILED', result.error?.message ?? 'Failed to verify access code.', result.error?.details);
+      return;
+    }
+
+    res.status(200).json({ success: true, data: result.data });
+  } catch (error) {
+    sendError(res, 500, 'PLOTTING_CALENDAR_VERIFY_ERROR', 'Unexpected error while verifying access code.', error);
+  }
+}
+
 export async function getSharedPlottingCalendarAvailableSlotsController(req: Request, res: Response): Promise<void> {
   try {
     const shareToken = req.params?.shareToken;
@@ -54,8 +74,9 @@ export async function getSharedPlottingCalendarAvailableSlotsController(req: Req
     }
 
     const date = typeof req.query?.date === 'string' ? req.query.date : undefined;
+    const accessCode = typeof req.query?.access_code === 'string' ? req.query.access_code : undefined;
 
-    const result = await plottingCalendarShareService.getSharedCalendarAvailableSlots(shareToken, date);
+    const result = await plottingCalendarShareService.getSharedCalendarAvailableSlots(shareToken, date, accessCode);
     if (result.error || !result.data) {
       sendError(res, 400, result.error?.code ?? 'PLOTTING_CALENDAR_SLOTS_FAILED', result.error?.message ?? 'Failed to calculate available slots.', result.error?.details);
       return;

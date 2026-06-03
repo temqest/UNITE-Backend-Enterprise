@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.plotting_calendars (
     allowed_user_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     allowed_organization_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[],
     share_token TEXT,
+    public_access_code TEXT,
     expires_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'active',
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -171,6 +172,11 @@ CREATE TABLE IF NOT EXISTS public.events (
     coverage_area_normalized_key TEXT,
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
     updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    latitude NUMERIC(10, 8),
+    longitude NUMERIC(11, 8),
+    map_location_label TEXT,
+    map_place_id TEXT,
+    map_address TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -218,7 +224,9 @@ CREATE TABLE IF NOT EXISTS public.events (
         (actual_collected_bags IS NULL OR actual_collected_bags >= 0)
         AND (actual_donors IS NULL OR actual_donors >= 0)
         AND (wastage_units IS NULL OR wastage_units >= 0)
-    )
+    ),
+    CONSTRAINT events_latitude_check CHECK (latitude IS NULL OR (latitude >= -90 AND latitude <= 90)),
+    CONSTRAINT events_longitude_check CHECK (longitude IS NULL OR (longitude >= -180 AND longitude <= 180))
 );
 
 CREATE INDEX IF NOT EXISTS events_org_id_idx

@@ -158,8 +158,9 @@ UNITE-Backend-Enterprise/
 | Item | Path |
 |------|------|
 | Page | `app/dashboard/page.tsx` |
-| API | `listEvents`, `getInventoryDashboard`, `listUsers` via `lib/api.ts` |
-| Notes | Summary cards; links to events/inventory/staff based on permissions |
+| Components | `components/dashboard/DashboardHeader.tsx`, `NeedsAttentionPanel.tsx`, `OperationsSummary.tsx`, `UpcomingEventsCard.tsx`, `InventoryRiskCard.tsx`, `CoverageSnapshotCard.tsx`, `TeamSnapshotCard.tsx`, `QuickActions.tsx`, `RecentActivityCard.tsx` |
+| API | `listEvents`, `getInventoryDashboard`, `listCoverageAreas`, `listUsers` via `lib/api.ts` |
+| Notes | Serves as an operational home page. Includes Needs Attention panel, metric summary cards, and snapshots for upcoming events, inventory risks, coverage progress, and team count based on permissions. |
 
 ### Campaign Management (`/dashboard/campaign`)
 
@@ -359,7 +360,7 @@ Deprecated approve/reject/reschedule may return `410 Gone` — see [campaign-eve
 
 **Access checks:** `hasCalendarAccess()` in `plotting-calendar.service.ts` — same org, `events.read` or staff role; managers bypass list restrictions; otherwise `access_type` + allow-lists.
 
-**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. Unauthenticated public plotting routes are available under `/api/v1/plotting-calendars/share/*`.
+**Share tokens:** Auto-generated for `share_token` and `organization_link` on create/update. Unauthenticated public plotting routes are available under `/api/v1/plotting-calendars/share/*`. Public share links are protected by a cryptographically secure 6-character access code (stored as a hash) that users must enter to view availability or plot events.
 
 ### Auth module
 
@@ -399,7 +400,7 @@ All authenticated user routes use: `authMiddleware` → `requireActiveUser` → 
 | Inventory | `app/dashboard/inventory/page.tsx` | `/api/v1/inventory/*` | |
 | Staff | `app/dashboard/staff/**` | `/api/v1/users/*` | |
 | Settings | `app/dashboard/settings/page.tsx` | `/api/v1/settings/*` | |
-| Donor portal | `app/donor/**` | `/api/v1/donor/*` | |
+| Donor portal | `app/donor/**`, `components/donor/DonorEventsPageClient.tsx` | `/api/v1/donor/*` | Dashboard (impact summary, readiness, upcoming, history, achievements, recommended events), Events browse (map-first two-column layout with Mapbox markers and fallback coordinate mapping, search/filter/sort, skeleton loading). Events page is server→client split for Mapbox token. |
 | Auth | `app/auth/**`, `components/auth/**` | `/api/v1/auth/*` | httpOnly refresh cookie |
 
 ---
@@ -431,7 +432,7 @@ Models live under `src/models/<domain>/` with `schema.sql`, `rls.sql`, `types.ts
 | | |
 |-|-|
 | **Path** | `src/models/events/` — `events` table |
-| **Key fields** | `status`, `setup_status`, `creation_method`, `plotting_calendar_id`, `type`, `event_date`, `start_time`, `end_time`, `extra_data`, `visibility`, `is_public` |
+| **Key fields** | `status`, `setup_status`, `creation_method`, `plotting_calendar_id`, `type`, `event_date`, `start_time`, `end_time`, `extra_data`, `visibility`, `is_public`, `latitude`, `longitude`, `map_location_label`, `map_place_id`, `map_address` |
 | **Statuses** | `draft`, `plotted`, `needs_details`, `scheduled`, `published`, `ongoing`, `completed`, `cancelled` |
 | **Frontend** | Campaign, my-events, calendar, plotting reserve |
 | **API** | `/api/v1/events/*` |

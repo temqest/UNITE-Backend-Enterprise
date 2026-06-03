@@ -667,7 +667,7 @@ class DonorService {
         const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
         const offset = Math.max(params.offset ?? 0, 0);
         let query = eventsTable
-            .select('id, title, type, event_date, start_time, end_time, address, is_public, visibility, setup_status, extra_data')
+            .select('id, title, type, event_date, start_time, end_time, address, is_public, visibility, setup_status, extra_data, latitude, longitude, map_location_label, map_address')
             .eq('status', 'published')
             .eq('setup_status', 'complete')
             .or('visibility.eq.public,is_public.eq.true')
@@ -738,6 +738,10 @@ class DonorService {
                 province: extraString(extra, 'province'),
                 city: extraString(extra, 'city') ?? extraString(extra, 'municipality') ?? extraString(extra, 'location'),
                 spots_left: maxSpots > 0 ? Math.max(0, maxSpots - joined) : null,
+                latitude: typeof event.latitude === 'number' ? event.latitude : null,
+                longitude: typeof event.longitude === 'number' ? event.longitude : null,
+                map_location_label: typeof event.map_location_label === 'string' ? event.map_location_label : null,
+                map_address: typeof event.map_address === 'string' ? event.map_address : null,
             };
         });
         return { data: mapped, error: null };
