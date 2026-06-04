@@ -1,4 +1,4 @@
-/* Total Staff Users: 6 */
+/* Total Staff Users: 11 */
 [
   {
     "id": "2e360f37-3780-4bea-8195-34840249102c",
@@ -47,6 +47,24 @@
     "created_at": "2026-04-01T14:00:04.088107+00:00",
     "updated_at": "2026-04-01T14:00:04.088107+00:00",
     "full_name": "Admin Test"
+  },
+  {
+    "id": "c08257bb-beeb-40f4-929e-4d077b8db69d",
+    "auth_id": "7ac6e45f-20f0-4ca8-84dd-b53840d83eab",
+    "email": "grace.mercado@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "donor_relations"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Legazpi City"
+    },
+    "created_at": "2026-06-04T12:55:04.012619+00:00",
+    "updated_at": "2026-06-04T12:55:04.012619+00:00",
+    "full_name": "Grace Mercado"
   },
   {
     "id": "e6fcea28-b830-4a8d-add5-67df556ea621",
@@ -220,5 +238,77 @@
     "created_at": "2026-04-21T07:21:58.669302+00:00",
     "updated_at": "2026-06-01T10:10:14.205481+00:00",
     "full_name": "Patrick Villamer"
+  },
+  {
+    "id": "58fb5d8f-6d31-40d4-a8a1-c584c2bcd5fa",
+    "auth_id": "ef935835-b390-47bd-8c7f-97924f4c7d92",
+    "email": "maria.santos@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "event_coordinator"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "City of Naga"
+    },
+    "created_at": "2026-06-04T12:55:00.747774+00:00",
+    "updated_at": "2026-06-04T12:55:00.747774+00:00",
+    "full_name": "Maria Santos"
+  },
+  {
+    "id": "04468666-1f82-410f-8d70-7f7ce790c79e",
+    "auth_id": "3753af30-03b1-4bae-8d10-d6b2666b0762",
+    "email": "joseph.reyes@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "inventory_staff"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Pili"
+    },
+    "created_at": "2026-06-04T12:55:01.568588+00:00",
+    "updated_at": "2026-06-04T12:55:01.568588+00:00",
+    "full_name": "Joseph Reyes"
+  },
+  {
+    "id": "1bf4b3b4-edff-4297-b1f5-dcce9c8ec7d8",
+    "auth_id": "523e1f31-25f6-4b45-8300-a6eb20881798",
+    "email": "ana.villanueva@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "coordinator"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "City of Iriga"
+    },
+    "created_at": "2026-06-04T12:55:02.384581+00:00",
+    "updated_at": "2026-06-04T12:55:02.384581+00:00",
+    "full_name": "Ana Villanueva"
+  },
+  {
+    "id": "ebfa6779-b939-4f61-b0b8-75083f3c82a0",
+    "auth_id": "16cdbe2e-5a08-467e-93ce-fb26a42fa5af",
+    "email": "carlo.mendoza@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "field_staff"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Calabanga"
+    },
+    "created_at": "2026-06-04T12:55:03.166611+00:00",
+    "updated_at": "2026-06-04T12:55:03.166611+00:00",
+    "full_name": "Carlo Mendoza"
   }
 ]

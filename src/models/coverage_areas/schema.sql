@@ -46,5 +46,6 @@ CREATE INDEX IF NOT EXISTS coverage_areas_org_id_idx ON public.organization_cove
 CREATE INDEX IF NOT EXISTS coverage_areas_status_idx ON public.organization_coverage_areas(status);
 CREATE INDEX IF NOT EXISTS coverage_areas_psgc_code_idx ON public.organization_coverage_areas(org_id, psgc_code);
 CREATE INDEX IF NOT EXISTS coverage_areas_normalized_key_idx ON public.organization_coverage_areas(org_id, normalized_area_key);
+CREATE UNIQUE INDEX IF NOT EXISTS organization_coverage_areas_org_normalized_key_idx ON public.organization_coverage_areas(org_id, normalized_area_key) WHERE normalized_area_key IS NOT NULL;
 
 ALTER TABLE public.organization_coverage_areas ENABLE ROW LEVEL SECURITY;

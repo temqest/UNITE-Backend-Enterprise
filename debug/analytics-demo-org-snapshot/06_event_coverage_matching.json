@@ -1,18 +1,52 @@
 /* Event Matching Evaluation */
 [
   {
-    "event_id": "57c71448-b965-45f9-9929-3723fb7d9564",
-    "event_title": "Naga (Verified)",
+    "event_id": "0b1734e6-43db-430c-b6cd-2b1e16da7bd9",
+    "event_title": "Naga Community Blood Drive",
     "event_location_fields": {
-      "address": null,
-      "coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
-      "psgc_code": "501724000",
-      "boundary_id": "naga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-naga|",
-      "province": "Camarines Sur",
-      "municipality": "City of Naga"
+      "address": "City of Naga Main Center",
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_naga-city",
+      "province": null,
+      "municipality": null
     },
-    "matched_coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+    "matched_coverage_area_name": "City of Naga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "7729d453-4484-43f3-b41c-bb54fd113c17",
+    "event_title": "Calabanga Barangay Outreach",
+    "event_location_fields": {
+      "address": "Calabanga Main Center",
+      "coverage_area_id": "8f4895c5-c8a1-4f3e-bbf1-d9f02c6d4602",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_calabanga",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "8f4895c5-c8a1-4f3e-bbf1-d9f02c6d4602",
+    "matched_coverage_area_name": "Calabanga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "55b3eab6-4751-48e5-8373-12dac5b1b7ea",
+    "event_title": "Naga Community Blood Drive - Phase 2",
+    "event_location_fields": {
+      "address": "City of Naga Main Center",
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_naga-city",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
     "matched_coverage_area_name": "City of Naga",
     "match_method": "coverage_area_id",
     "reason": ""
@@ -22,32 +56,83 @@
     "event_title": "BirthDay Ko",
     "event_location_fields": {
       "address": null,
-      "coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
-      "psgc_code": "501724000",
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": "051724000",
       "boundary_id": "naga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-naga|",
+      "normalized_key": "camarines-sur_naga-city",
       "province": "Camarines Sur",
       "municipality": "City of Naga"
     },
-    "matched_coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
     "matched_coverage_area_name": "City of Naga",
     "match_method": "coverage_area_id",
     "reason": ""
   },
   {
-    "event_id": "27ff3cf0-8a2d-4c36-8d45-7c2d3efda28b",
-    "event_title": "Naga 2",
+    "event_id": "8838e102-9f80-462c-9f19-c88a7d1f4369",
+    "event_title": "Iriga City Donation Drive",
     "event_location_fields": {
-      "address": null,
-      "coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
-      "psgc_code": "501724000",
-      "boundary_id": "naga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-naga|",
-      "province": "Camarines Sur",
-      "municipality": "City of Naga"
+      "address": "City of Iriga Main Center",
+      "coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_iriga-city",
+      "province": null,
+      "municipality": null
     },
-    "matched_coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
-    "matched_coverage_area_name": "City of Naga",
+    "matched_coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+    "matched_coverage_area_name": "City of Iriga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "c8128757-b1c3-4d25-ba65-40dc90aef1a7",
+    "event_title": "Baao Municipal Blood Drive",
+    "event_location_fields": {
+      "address": "Baao Main Center",
+      "coverage_area_id": "10fac250-4e1d-4888-bee4-b49e72d1f1c6",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_baao",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "10fac250-4e1d-4888-bee4-b49e72d1f1c6",
+    "matched_coverage_area_name": "Baao",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "e2885fb8-da6c-4dd3-8ae1-8a1df26c0aba",
+    "event_title": "Masbate Community Blood Drive",
+    "event_location_fields": {
+      "address": "Masbate City Main Center",
+      "coverage_area_id": "8ae999f9-7e58-403b-89bf-9cd4c461e8ae",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "masbate_masbate-city",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "8ae999f9-7e58-403b-89bf-9cd4c461e8ae",
+    "matched_coverage_area_name": "Masbate City",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "7fb873f6-e3a2-4b5b-9f49-7f68ee5518c7",
+    "event_title": "Draft Iriga Event",
+    "event_location_fields": {
+      "address": "City of Iriga Main Center",
+      "coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_iriga-city",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+    "matched_coverage_area_name": "City of Iriga",
     "match_method": "coverage_area_id",
     "reason": ""
   },
@@ -56,15 +141,134 @@
     "event_title": "Iriga Birthday",
     "event_location_fields": {
       "address": null,
-      "coverage_area_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+      "coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
       "psgc_code": "501716000",
       "boundary_id": "iriga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-iriga|",
+      "normalized_key": "camarines-sur_iriga-city",
       "province": "Camarines Sur",
       "municipality": "City of Iriga"
     },
-    "matched_coverage_area_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+    "matched_coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
     "matched_coverage_area_name": "City of Iriga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "27ff3cf0-8a2d-4c36-8d45-7c2d3efda28b",
+    "event_title": "Naga 2",
+    "event_location_fields": {
+      "address": null,
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": "051724000",
+      "boundary_id": "naga-city",
+      "normalized_key": "camarines-sur_naga-city",
+      "province": "Camarines Sur",
+      "municipality": "City of Naga"
+    },
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+    "matched_coverage_area_name": "City of Naga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "57c71448-b965-45f9-9929-3723fb7d9564",
+    "event_title": "Naga (Verified)",
+    "event_location_fields": {
+      "address": null,
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": "051724000",
+      "boundary_id": "naga-city",
+      "normalized_key": "camarines-sur_naga-city",
+      "province": "Camarines Sur",
+      "municipality": "City of Naga"
+    },
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+    "matched_coverage_area_name": "City of Naga",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "5d378e90-e595-4abe-b932-3630654827d2",
+    "event_title": "Pili Campus Bloodletting",
+    "event_location_fields": {
+      "address": "Pili Main Center",
+      "coverage_area_id": "4f8fbeb3-7b3e-4555-906c-f8d4aace6695",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_pili",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "4f8fbeb3-7b3e-4555-906c-f8d4aace6695",
+    "matched_coverage_area_name": "Pili",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "a56a8dd8-ee11-417e-9073-f6370e5e7a7d",
+    "event_title": "Legazpi Public Donation Day",
+    "event_location_fields": {
+      "address": "Legazpi City Main Center",
+      "coverage_area_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "albay_legazpi-city",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+    "matched_coverage_area_name": "Legazpi City",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "5bd31eb1-3907-4fba-94ec-91e40da05710",
+    "event_title": "Cancelled Legazpi Event",
+    "event_location_fields": {
+      "address": "Legazpi City Main Center",
+      "coverage_area_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "albay_legazpi-city",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+    "matched_coverage_area_name": "Legazpi City",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "fa0ed18a-8299-48b4-a494-12aabac871c0",
+    "event_title": "Daet Provincial Bloodletting",
+    "event_location_fields": {
+      "address": "Daet Main Center",
+      "coverage_area_id": "bcc8b3d8-560f-4a73-bf35-6e3429806afb",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-norte_daet",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "bcc8b3d8-560f-4a73-bf35-6e3429806afb",
+    "matched_coverage_area_name": "Daet",
+    "match_method": "coverage_area_id",
+    "reason": ""
+  },
+  {
+    "event_id": "921394a4-4438-47e1-95f8-5894f30436b7",
+    "event_title": "Bato Health Center Donation Day",
+    "event_location_fields": {
+      "address": "Bato Main Center",
+      "coverage_area_id": "f40ce414-8e28-4901-9d8c-ea8592f49c19",
+      "psgc_code": null,
+      "boundary_id": null,
+      "normalized_key": "camarines-sur_bato",
+      "province": null,
+      "municipality": null
+    },
+    "matched_coverage_area_id": "f40ce414-8e28-4901-9d8c-ea8592f49c19",
+    "matched_coverage_area_name": "Bato",
     "match_method": "coverage_area_id",
     "reason": ""
   },
@@ -73,14 +277,14 @@
     "event_title": "Dugo Atenista",
     "event_location_fields": {
       "address": "Naga City",
-      "coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
-      "psgc_code": "501724000",
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": "051724000",
       "boundary_id": "naga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-naga|",
+      "normalized_key": "camarines-sur_naga-city",
       "province": "Camarines Sur",
       "municipality": "City of Naga"
     },
-    "matched_coverage_area_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
     "matched_coverage_area_name": "City of Naga",
     "match_method": "coverage_area_id",
     "reason": ""
@@ -90,31 +294,31 @@
     "event_title": "QA Test Blood Drive Updated",
     "event_location_fields": {
       "address": "QA Test Venue",
-      "coverage_area_id": null,
-      "psgc_code": null,
+      "coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "psgc_code": "051724000",
       "boundary_id": null,
-      "normalized_key": "|||",
+      "normalized_key": "camarines-sur_naga-city",
       "province": null,
       "municipality": null
     },
-    "matched_coverage_area_id": null,
-    "matched_coverage_area_name": null,
-    "match_method": "no_match",
-    "reason": "No explicit ID, PSGC, or normalized key matching available areas."
+    "matched_coverage_area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+    "matched_coverage_area_name": "City of Naga",
+    "match_method": "coverage_area_id",
+    "reason": ""
   },
   {
     "event_id": "429f1f46-a33c-4f77-9ae8-5b1580caf72a",
     "event_title": "Iriga Blood",
     "event_location_fields": {
       "address": null,
-      "coverage_area_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+      "coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
       "psgc_code": "501716000",
       "boundary_id": "iriga-city",
-      "normalized_key": "bicol-region|camarines-sur|city-of-iriga|",
+      "normalized_key": "camarines-sur_iriga-city",
       "province": "Camarines Sur",
       "municipality": "City of Iriga"
     },
-    "matched_coverage_area_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+    "matched_coverage_area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
     "matched_coverage_area_name": "City of Iriga",
     "match_method": "coverage_area_id",
     "reason": ""
