@@ -1,0 +1,94 @@
+/* Manual Recalculation Output */
+{
+  "total_events": 19,
+  "completed_events": 8,
+  "events_needing_details": 0,
+  "collected_units": 2279,
+  "target_units": 1200,
+  "coverage_progress": [
+    {
+      "area_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "area_name": "City of Naga",
+      "target": 500,
+      "collected": 760,
+      "progress": 152
+    },
+    {
+      "area_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+      "area_name": "City of Iriga",
+      "target": 1000,
+      "collected": 1280,
+      "progress": 128
+    },
+    {
+      "area_id": "10fac250-4e1d-4888-bee4-b49e72d1f1c6",
+      "area_name": "Baao",
+      "target": 150,
+      "collected": 110,
+      "progress": 73
+    },
+    {
+      "area_id": "8f4895c5-c8a1-4f3e-bbf1-d9f02c6d4602",
+      "area_name": "Calabanga",
+      "target": 200,
+      "collected": 34,
+      "progress": 17
+    },
+    {
+      "area_id": "4f8fbeb3-7b3e-4555-906c-f8d4aace6695",
+      "area_name": "Pili",
+      "target": 1500,
+      "collected": 95,
+      "progress": 6
+    },
+    {
+      "area_id": "02501e88-f684-47fe-9b00-90a953fe76ec",
+      "area_name": "Camaligan",
+      "target": 0,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "d040081b-3b9f-4927-a663-4c51f132349b",
+      "area_name": "Daraga",
+      "target": 0,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "295ec5cc-eb92-4292-9fcd-722479cd0570",
+      "area_name": "San Fernando",
+      "target": 0,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "f40ce414-8e28-4901-9d8c-ea8592f49c19",
+      "area_name": "Bato",
+      "target": 100,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "bcc8b3d8-560f-4a73-bf35-6e3429806afb",
+      "area_name": "Daet",
+      "target": 250,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+      "area_name": "Legazpi City",
+      "target": 400,
+      "collected": 0,
+      "progress": 0
+    },
+    {
+      "area_id": "8ae999f9-7e58-403b-89bf-9cd4c461e8ae",
+      "area_name": "Masbate City",
+      "target": 250,
+      "collected": 0,
+      "progress": 0
+    }
+  ]
+}

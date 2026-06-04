@@ -38,12 +38,17 @@ The Analytics page is now powered by real backend data. It uses a single endpoin
 The `/dashboard` endpoint returns a composite JSON structure:
 - `summary`: Top-level KPIs (Total events, collected units, goal achievement).
 - `events`: Event distribution, statuses, and performance over time.
-- `inventory`: Current stock levels vs minimum thresholds, Code Red status.
+- `inventory`: Current stock levels vs minimum thresholds, Code Red status, expiring soon units, and monthly movement trends derived from transactions.
 - `coverage`: Event completion and unit collection progress mapped to geographic areas.
-- `staff`: Staff event completion rates and collection contributions.
+- `staff`: Staff event completion rates, collection contributions, top performing staff, and staff needing follow-up.
 - `insights`: Actionable, prioritized recommendations based on aggregated data.
+- `data_quality`: Metadata about the quality and volume of data used, allowing the frontend to render explicit empty states.
+
+## Data Philosophy & Strict Rendering Rules
+- **No Mock Data**: The dashboard strictly forbids rendering hardcoded string fallbacks, fake charts, or sample ranking tables.
+- **Explicit Low-Data States**: If the backend payload (`data_quality` flags or raw arrays) indicates insufficient volume (e.g. 0 completed events, no transactions), components display clear, explicit `AnalyticsEmptyState` blocks guiding the user on how to generate the required metrics (e.g., "Complete post-event updates to generate insights.").
 
 ## Known Limitations & Future Work
 - **Historical Code Red Tracking**: True historical snapshots are not currently available in the schema. Current Code Red logic generates simulated ongoing alerts based on current inventory dropping below minimum thresholds. A snapshot system (e.g., daily cron jobs recording stock levels) is required for accurate historical reporting.
-- **Performance Tuning**: As the event dataset grows, complex joins may require materialized views in Supabase. We have implemented frontend TTL caching (via `cachedApiResponse` and `api-cache.ts`) and backend in-memory cache in the controller with 60s TTL to prevent burst querying. Backend service queries are parallelized with `Promise.all` for speed.
+- **Performance Tuning**: As the event dataset grows, complex joins may require materialized views in Supabase. We have implemented frontend TTL caching (via `cachedApiResponse` and `api-cache.ts`) and backend in-memory cache in the controller with 60s TTL to prevent burst querying. Backend service queries are parallelized with `Promise.all` for speed. The frontend provides a `?refresh=true` cache-buster to instantly pull fresh metrics on user request.
 - **Dedicated Permissions**: If a dedicated `analytics.read` scope is added to the RBAC system, the route definition in `analytics.routes.ts` should be updated.

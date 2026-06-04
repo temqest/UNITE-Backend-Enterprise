@@ -1,0 +1,67 @@
+/* Total Plotted Events: 8 */
+[
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "0c3192db-9a58-4ba5-848e-7742ab585702",
+    "event_title": "BirthDay Ko",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "plotted",
+    "created_at": "2026-06-02T16:05:13.228888+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "3ef800c0-6e16-4ef2-80a7-03fe319554e7",
+    "event_title": "Iriga Birthday",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "completed",
+    "created_at": "2026-06-02T16:07:13.010691+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "27ff3cf0-8a2d-4c36-8d45-7c2d3efda28b",
+    "event_title": "Naga 2",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "completed",
+    "created_at": "2026-05-30T06:42:33.892569+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "57c71448-b965-45f9-9929-3723fb7d9564",
+    "event_title": "Naga (Verified)",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "published",
+    "created_at": "2026-05-30T06:35:39.866193+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "fa0ed18a-8299-48b4-a494-12aabac871c0",
+    "event_title": "Daet Provincial Bloodletting",
+    "reserved_by": null,
+    "status": "plotted",
+    "created_at": "2026-06-04T12:55:07.105977+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "921394a4-4438-47e1-95f8-5894f30436b7",
+    "event_title": "Bato Health Center Donation Day",
+    "reserved_by": null,
+    "status": "plotted",
+    "created_at": "2026-06-04T12:55:06.799731+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "c0e53d91-c9b8-4d7e-90d9-6125da6d55a5",
+    "event_title": "Dugo Atenista",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "published",
+    "created_at": "2026-06-02T16:13:45.888858+00:00"
+  },
+  {
+    "plotting_calendar_id": "7ae9303f-e855-48ec-93a4-dd20af112bc1",
+    "event_id": "429f1f46-a33c-4f77-9ae8-5b1580caf72a",
+    "event_title": "Iriga Blood",
+    "reserved_by": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "status": "completed",
+    "created_at": "2026-05-30T06:23:28.505494+00:00"
+  }
+]

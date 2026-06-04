@@ -1,0 +1,314 @@
+/* Total Staff Users: 11 */
+[
+  {
+    "id": "2e360f37-3780-4bea-8195-34840249102c",
+    "auth_id": "1eb4e511-6eb1-45d1-b17a-993ee9f341a5",
+    "email": "admin@example.com",
+    "role": {
+      "type": "admin",
+      "permissions": [
+        "organization.read",
+        "organization.update",
+        "users.read",
+        "users.invite",
+        "users.approve",
+        "users.manage",
+        "campaigns.read",
+        "campaigns.create",
+        "campaigns.update",
+        "events.read",
+        "events.create",
+        "events.update",
+        "events.approve",
+        "events.delete",
+        "events.reschedule",
+        "chat.read",
+        "chat.write",
+        "inventory.read",
+        "inventory.update",
+        "documents.read",
+        "documents.write",
+        "reports.read",
+        "reports.export",
+        "settings.read",
+        "settings.update"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "sector": "LGU",
+      "options": [
+        "specify_location"
+      ],
+      "district": "2nd District",
+      "province": "Camarines Sur",
+      "municipality": "Cawayan"
+    },
+    "created_at": "2026-04-01T14:00:04.088107+00:00",
+    "updated_at": "2026-04-01T14:00:04.088107+00:00",
+    "full_name": "Admin Test"
+  },
+  {
+    "id": "c08257bb-beeb-40f4-929e-4d077b8db69d",
+    "auth_id": "7ac6e45f-20f0-4ca8-84dd-b53840d83eab",
+    "email": "grace.mercado@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "donor_relations"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Legazpi City"
+    },
+    "created_at": "2026-06-04T12:55:04.012619+00:00",
+    "updated_at": "2026-06-04T12:55:04.012619+00:00",
+    "full_name": "Grace Mercado"
+  },
+  {
+    "id": "e6fcea28-b830-4a8d-add5-67df556ea621",
+    "auth_id": "7f3c6f05-2357-4be6-992f-63bee43070ad",
+    "email": "patrickkurtv@gmail.com",
+    "role": {
+      "type": "super_admin",
+      "permissions": [
+        "*"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": null,
+    "created_at": "2026-03-30T17:34:13.821466+00:00",
+    "updated_at": "2026-04-06T05:42:08.445368+00:00",
+    "full_name": "Patrick Villamer"
+  },
+  {
+    "id": "cbe0d564-86a2-472a-9387-df2d95fd4a35",
+    "auth_id": "0f02843b-1a70-41f3-8ccb-bee2d8939c08",
+    "email": "pvillamer@gbox.adnu.edu.ph",
+    "role": {
+      "type": "coordinator",
+      "permissions": [
+        "campaigns.read",
+        "campaigns.create",
+        "campaigns.update",
+        "users.invite",
+        "events.read",
+        "events.create",
+        "events.update",
+        "events.approve",
+        "events.reschedule",
+        "chat.read",
+        "chat.write",
+        "inventory.read",
+        "inventory.update",
+        "documents.read",
+        "documents.write",
+        "reports.read"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "region": "Bicol Region",
+      "sector": "LGU",
+      "province": "Camarines Sur",
+      "area_name": "City of Naga",
+      "area_type": "city",
+      "psgc_code": "501724000",
+      "boundary_id": "naga-city",
+      "assigned_areas": [
+        {
+          "region": "Bicol Region",
+          "province": "Camarines Sur",
+          "area_name": "City of Naga",
+          "area_type": "city",
+          "psgc_code": "501724000",
+          "boundary_id": "naga-city",
+          "normalized_area_key": "naga-city"
+        },
+        {
+          "region": "Bicol Region",
+          "province": "Camarines Sur",
+          "area_name": "City of Iriga",
+          "area_type": "city",
+          "psgc_code": "501716000",
+          "boundary_id": "iriga-city",
+          "normalized_area_key": "iriga-city"
+        }
+      ],
+      "normalized_area_key": "naga-city"
+    },
+    "created_at": "2026-04-21T07:40:25.597828+00:00",
+    "updated_at": "2026-06-01T07:38:16.112916+00:00",
+    "full_name": "Staff Demo"
+  },
+  {
+    "id": "d11fd5ec-548c-40c6-acb1-4d43dfec2d8c",
+    "auth_id": "cc16f078-4ecb-47e2-ae19-cee048d2e969",
+    "email": "patrick08121@gmail.com",
+    "role": {
+      "type": "stakeholder",
+      "permissions": [
+        "campaigns.read",
+        "events.read",
+        "events.create",
+        "events.update",
+        "chat.read",
+        "documents.read"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "sector": "LGU"
+    },
+    "created_at": "2026-04-01T03:05:36.038792+00:00",
+    "updated_at": "2026-06-01T08:23:15.906327+00:00",
+    "full_name": "Patrick User"
+  },
+  {
+    "id": "a64166fb-fe9b-4833-9b3e-609b2a30ffa4",
+    "auth_id": "dbd1edb6-6156-4f66-8cdf-3440deacb58b",
+    "email": "johnclark87610@gmail.com",
+    "role": {
+      "type": "coordinator",
+      "permissions": [
+        "campaigns.read",
+        "campaigns.create",
+        "campaigns.update",
+        "events.read",
+        "events.create",
+        "events.update",
+        "chat.read",
+        "chat.write",
+        "documents.read",
+        "documents.write"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "sector": "LGU",
+      "options": []
+    },
+    "created_at": "2026-03-31T14:47:06.949324+00:00",
+    "updated_at": "2026-06-01T08:38:14.301934+00:00",
+    "full_name": "John Clark"
+  },
+  {
+    "id": "b733ec80-37c8-44b7-97d6-90b78675c4dc",
+    "auth_id": "013ee486-c883-43bc-aa8b-7910cdfc4261",
+    "email": "demo@admin.com",
+    "role": {
+      "type": "admin",
+      "permissions": [
+        "organization.read",
+        "organization.update",
+        "users.read",
+        "users.invite",
+        "users.approve",
+        "users.manage",
+        "campaigns.read",
+        "campaigns.create",
+        "campaigns.update",
+        "events.read",
+        "events.create",
+        "events.update",
+        "events.approve",
+        "events.delete",
+        "events.reschedule",
+        "chat.read",
+        "chat.write",
+        "inventory.read",
+        "inventory.update",
+        "documents.read",
+        "documents.write",
+        "reports.read",
+        "reports.export",
+        "settings.read",
+        "settings.update"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "sector": "LGU",
+      "options": [],
+      "district": "4th District",
+      "province": "Camarines Sur",
+      "municipality": "Sipocot"
+    },
+    "created_at": "2026-04-21T07:21:58.669302+00:00",
+    "updated_at": "2026-06-01T10:10:14.205481+00:00",
+    "full_name": "Patrick Villamer"
+  },
+  {
+    "id": "58fb5d8f-6d31-40d4-a8a1-c584c2bcd5fa",
+    "auth_id": "ef935835-b390-47bd-8c7f-97924f4c7d92",
+    "email": "maria.santos@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "event_coordinator"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "City of Naga"
+    },
+    "created_at": "2026-06-04T12:55:00.747774+00:00",
+    "updated_at": "2026-06-04T12:55:00.747774+00:00",
+    "full_name": "Maria Santos"
+  },
+  {
+    "id": "04468666-1f82-410f-8d70-7f7ce790c79e",
+    "auth_id": "3753af30-03b1-4bae-8d10-d6b2666b0762",
+    "email": "joseph.reyes@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "inventory_staff"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Pili"
+    },
+    "created_at": "2026-06-04T12:55:01.568588+00:00",
+    "updated_at": "2026-06-04T12:55:01.568588+00:00",
+    "full_name": "Joseph Reyes"
+  },
+  {
+    "id": "1bf4b3b4-edff-4297-b1f5-dcce9c8ec7d8",
+    "auth_id": "523e1f31-25f6-4b45-8300-a6eb20881798",
+    "email": "ana.villanueva@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "coordinator"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "City of Iriga"
+    },
+    "created_at": "2026-06-04T12:55:02.384581+00:00",
+    "updated_at": "2026-06-04T12:55:02.384581+00:00",
+    "full_name": "Ana Villanueva"
+  },
+  {
+    "id": "ebfa6779-b939-4f61-b0b8-75083f3c82a0",
+    "auth_id": "16cdbe2e-5a08-467e-93ce-fb26a42fa5af",
+    "email": "carlo.mendoza@demo.com",
+    "role": {
+      "type": "staff",
+      "permissions": [
+        "field_staff"
+      ]
+    },
+    "is_active": true,
+    "geographic_area": {
+      "description": "Calabanga"
+    },
+    "created_at": "2026-06-04T12:55:03.166611+00:00",
+    "updated_at": "2026-06-04T12:55:03.166611+00:00",
+    "full_name": "Carlo Mendoza"
+  }
+]

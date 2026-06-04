@@ -1,0 +1,55 @@
+{
+  "total_raw_records": 19,
+  "duplicate_groups": 7,
+  "actions": [
+    {
+      "action": "merge_and_delete",
+      "group": "city of iriga",
+      "canonical_id": "7d5dced1-4e6c-4d6b-90dd-012330c43d67",
+      "deleted_id": "3ed6037a-5ceb-4c66-8731-ddce7a96ab7a",
+      "reassigned_events": 2
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "baao",
+      "canonical_id": "10fac250-4e1d-4888-bee4-b49e72d1f1c6",
+      "deleted_id": "490c244c-2bbc-4bfa-b099-96e7b4fec6da",
+      "reassigned_events": 0
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "pili",
+      "canonical_id": "4f8fbeb3-7b3e-4555-906c-f8d4aace6695",
+      "deleted_id": "da65ce7a-9650-4cf7-bd74-f0bcdba346c0",
+      "reassigned_events": 0
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "daet",
+      "canonical_id": "bcc8b3d8-560f-4a73-bf35-6e3429806afb",
+      "deleted_id": "87ffb5f2-30d2-473c-bbc2-a92177a38131",
+      "reassigned_events": 0
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "legazpi city",
+      "canonical_id": "8a955d48-9994-43ec-8b9f-10c8e6a33061",
+      "deleted_id": "b4f18658-07f9-43b0-a85c-ea49e67dd982",
+      "reassigned_events": 0
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "masbate city",
+      "canonical_id": "8ae999f9-7e58-403b-89bf-9cd4c461e8ae",
+      "deleted_id": "4a111a37-16be-46f1-b77c-34416e91df28",
+      "reassigned_events": 0
+    },
+    {
+      "action": "merge_and_delete",
+      "group": "city of naga",
+      "canonical_id": "a478d4c6-24a7-4096-b00f-e37bb396cf59",
+      "deleted_id": "dbd374c6-5f3c-4b24-b78e-084af1eb21e4",
+      "reassigned_events": 5
+    }
+  ]
+}

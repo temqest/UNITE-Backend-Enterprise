@@ -1,0 +1,524 @@
+/* Analytics Service Response */
+{
+  "filters": {
+    "dateRange": "last_30_days"
+  },
+  "summary": {
+    "total_events": 19,
+    "completed_events": 8,
+    "collected_units": 2279,
+    "target_units": 1200,
+    "goal_achievement_percentage": 190,
+    "low_stock_alerts": 1,
+    "active_coverage_areas": 12
+  },
+  "events": {
+    "events_by_status": [
+      {
+        "status": "completed",
+        "count": 8
+      },
+      {
+        "status": "published",
+        "count": 5
+      },
+      {
+        "status": "plotted",
+        "count": 3
+      },
+      {
+        "status": "draft",
+        "count": 1
+      },
+      {
+        "status": "cancelled",
+        "count": 2
+      }
+    ],
+    "events_by_type": [
+      {
+        "type": "blood_drive",
+        "count": 19
+      }
+    ],
+    "creation_method": [
+      {
+        "method": "manual",
+        "count": 11
+      },
+      {
+        "method": "plotting_calendar",
+        "count": 8
+      }
+    ],
+    "events_needing_details": 0,
+    "target_vs_actual_by_event": [
+      {
+        "id": "0b1734e6-43db-430c-b6cd-2b1e16da7bd9",
+        "name": "Naga Community Blood Drive",
+        "target_units": 200,
+        "collected_units": 260,
+        "achievement_percentage": 130
+      },
+      {
+        "id": "7729d453-4484-43f3-b41c-bb54fd113c17",
+        "name": "Calabanga Barangay Outreach",
+        "target_units": 80,
+        "collected_units": 34,
+        "achievement_percentage": 43
+      },
+      {
+        "id": "8838e102-9f80-462c-9f19-c88a7d1f4369",
+        "name": "Iriga City Donation Drive",
+        "target_units": 150,
+        "collected_units": 180,
+        "achievement_percentage": 120
+      },
+      {
+        "id": "c8128757-b1c3-4d25-ba65-40dc90aef1a7",
+        "name": "Baao Municipal Blood Drive",
+        "target_units": 100,
+        "collected_units": 110,
+        "achievement_percentage": 110
+      },
+      {
+        "id": "3ef800c0-6e16-4ef2-80a7-03fe319554e7",
+        "name": "Iriga Birthday",
+        "target_units": 250,
+        "collected_units": 0,
+        "achievement_percentage": 0
+      },
+      {
+        "id": "27ff3cf0-8a2d-4c36-8d45-7c2d3efda28b",
+        "name": "Naga 2",
+        "target_units": 200,
+        "collected_units": 500,
+        "achievement_percentage": 250
+      },
+      {
+        "id": "5d378e90-e595-4abe-b932-3630654827d2",
+        "name": "Pili Campus Bloodletting",
+        "target_units": 120,
+        "collected_units": 95,
+        "achievement_percentage": 79
+      },
+      {
+        "id": "429f1f46-a33c-4f77-9ae8-5b1580caf72a",
+        "name": "Iriga Blood",
+        "target_units": 100,
+        "collected_units": 1100,
+        "achievement_percentage": 1100
+      }
+    ],
+    "top_performing_events": [
+      {
+        "id": "429f1f46-a33c-4f77-9ae8-5b1580caf72a",
+        "name": "Iriga Blood",
+        "target_units": 100,
+        "collected_units": 1100,
+        "achievement_percentage": 1100
+      },
+      {
+        "id": "27ff3cf0-8a2d-4c36-8d45-7c2d3efda28b",
+        "name": "Naga 2",
+        "target_units": 200,
+        "collected_units": 500,
+        "achievement_percentage": 250
+      },
+      {
+        "id": "0b1734e6-43db-430c-b6cd-2b1e16da7bd9",
+        "name": "Naga Community Blood Drive",
+        "target_units": 200,
+        "collected_units": 260,
+        "achievement_percentage": 130
+      },
+      {
+        "id": "8838e102-9f80-462c-9f19-c88a7d1f4369",
+        "name": "Iriga City Donation Drive",
+        "target_units": 150,
+        "collected_units": 180,
+        "achievement_percentage": 120
+      },
+      {
+        "id": "c8128757-b1c3-4d25-ba65-40dc90aef1a7",
+        "name": "Baao Municipal Blood Drive",
+        "target_units": 100,
+        "collected_units": 110,
+        "achievement_percentage": 110
+      }
+    ],
+    "events_needing_action": [
+      {
+        "id": "3ef800c0-6e16-4ef2-80a7-03fe319554e7",
+        "name": "Iriga Birthday",
+        "reason": "Missing post-event update",
+        "status": "completed"
+      }
+    ],
+    "event_completion_quality": {
+      "total_completed": 8,
+      "with_post_event_update": 7,
+      "completion_update_rate": 88,
+      "cancelled_events": 2
+    }
+  },
+  "collection": {
+    "monthly_collections": [
+      {
+        "month": "May",
+        "units": 569,
+        "completed_events": 4
+      },
+      {
+        "month": "Jun",
+        "units": 1710,
+        "completed_events": 3
+      },
+      {
+        "month": "Nov",
+        "units": 0,
+        "completed_events": 1
+      }
+    ],
+    "highest_collection_month": {
+      "month": "Jun",
+      "units": 1710,
+      "completed_events": 3
+    },
+    "average_monthly_collection": 760
+  },
+  "inventory": {
+    "current_stock": [
+      {
+        "blood_type": "A+",
+        "quantity": 40,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "A-",
+        "quantity": 18,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "B+",
+        "quantity": 150,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "B-",
+        "quantity": 40,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "AB+",
+        "quantity": 20,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "AB-",
+        "quantity": 110,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "O+",
+        "quantity": 45,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "O-",
+        "quantity": 100,
+        "min_threshold": 50
+      }
+    ],
+    "low_stock_blood_types": [
+      {
+        "blood_type": "A+",
+        "quantity": 40,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "A-",
+        "quantity": 18,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "B-",
+        "quantity": 40,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "AB+",
+        "quantity": 20,
+        "min_threshold": 50
+      },
+      {
+        "blood_type": "O+",
+        "quantity": 45,
+        "min_threshold": 50
+      }
+    ],
+    "code_red_blood_types": [],
+    "expiring_soon_units": [],
+    "movement_trend": [
+      {
+        "month": "May",
+        "added": 268,
+        "used": 120
+      },
+      {
+        "month": "Jun",
+        "added": 20,
+        "used": 0
+      },
+      {
+        "month": "Apr",
+        "added": 350,
+        "used": 20
+      }
+    ]
+  },
+  "coverage": {
+    "progress_by_area": [
+      {
+        "area": "City of Naga",
+        "target": 500,
+        "collected": 760,
+        "progress": 152,
+        "completed_events": 2,
+        "upcoming_events": 4
+      },
+      {
+        "area": "City of Iriga",
+        "target": 1000,
+        "collected": 1280,
+        "progress": 128,
+        "completed_events": 3,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Baao",
+        "target": 150,
+        "collected": 110,
+        "progress": 73,
+        "completed_events": 1,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Calabanga",
+        "target": 200,
+        "collected": 34,
+        "progress": 17,
+        "completed_events": 1,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Pili",
+        "target": 1500,
+        "collected": 95,
+        "progress": 6,
+        "completed_events": 1,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Camaligan",
+        "target": 0,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Daraga",
+        "target": 0,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 0
+      },
+      {
+        "area": "San Fernando",
+        "target": 0,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Bato",
+        "target": 100,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Daet",
+        "target": 250,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Legazpi City",
+        "target": 400,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Masbate City",
+        "target": 250,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      }
+    ],
+    "top_performing_areas": [
+      {
+        "area": "City of Naga",
+        "target": 500,
+        "collected": 760,
+        "progress": 152,
+        "completed_events": 2,
+        "upcoming_events": 4
+      },
+      {
+        "area": "City of Iriga",
+        "target": 1000,
+        "collected": 1280,
+        "progress": 128,
+        "completed_events": 3,
+        "upcoming_events": 0
+      }
+    ],
+    "areas_needing_attention": [
+      {
+        "area": "Calabanga",
+        "target": 200,
+        "collected": 34,
+        "progress": 17,
+        "completed_events": 1,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Pili",
+        "target": 1500,
+        "collected": 95,
+        "progress": 6,
+        "completed_events": 1,
+        "upcoming_events": 0
+      },
+      {
+        "area": "Bato",
+        "target": 100,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Daet",
+        "target": 250,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Legazpi City",
+        "target": 400,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      },
+      {
+        "area": "Masbate City",
+        "target": 250,
+        "collected": 0,
+        "progress": 0,
+        "completed_events": 0,
+        "upcoming_events": 1
+      }
+    ]
+  },
+  "staff": {
+    "staff_activity": [],
+    "top_performing_staff": [],
+    "staff_needing_follow_up": []
+  },
+  "insights": [
+    {
+      "id": "cov-Calabanga",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Calabanga is below 50% of target (17%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    },
+    {
+      "id": "cov-Pili",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Pili is below 50% of target (6%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    },
+    {
+      "id": "cov-Bato",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Bato is below 50% of target (0%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    },
+    {
+      "id": "cov-Daet",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Daet is below 50% of target (0%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    },
+    {
+      "id": "cov-Legazpi City",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Legazpi City is below 50% of target (0%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    },
+    {
+      "id": "cov-Masbate City",
+      "severity": "warning",
+      "category": "coverage",
+      "title": "Low Coverage Progress",
+      "description": "Masbate City is below 50% of target (0%).",
+      "action_label": "View Map",
+      "action_href": "/dashboard/coverage-map"
+    }
+  ],
+  "key_findings": [
+    "Calabanga is below 50% of target (17%).",
+    "Pili is below 50% of target (6%).",
+    "Bato is below 50% of target (0%).",
+    "Daet is below 50% of target (0%)."
+  ],
+  "data_quality": {
+    "uses_mock_data": false,
+    "event_result_count": 8,
+    "coverage_result_count": 12,
+    "inventory_transaction_count": 3,
+    "staff_activity_source": "assignments",
+    "warnings": []
+  },
+  "generated_at": "2026-06-04T13:05:04.114Z"
+}

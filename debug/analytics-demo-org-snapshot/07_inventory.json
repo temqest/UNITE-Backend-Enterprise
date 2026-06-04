@@ -1,0 +1,123 @@
+/* Total Inventory Records: 10 */
+[
+  {
+    "id": "caaafe5b-0b36-421c-adc0-2f490b9f193e",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "O+",
+    "quantity": 0,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "e32cc14a-6217-4953-b515-351813e992be",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "O-",
+    "quantity": 100,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "9a802da3-6d21-4f43-9264-dc53de2242bf",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "A+",
+    "quantity": 40,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "0d5f5e8e-c781-4c9d-a87b-ad60e09f370f",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "A-",
+    "quantity": 18,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "aeecb6b7-d58b-44fa-ad53-bc8cc8c13110",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "B+",
+    "quantity": 150,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "e47d6010-4dd9-45d4-ad0a-f92c52c110b1",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "B-",
+    "quantity": 40,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "cf55e208-db76-48f4-bc2a-ba21f034b43c",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "AB+",
+    "quantity": 20,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "03c27460-422e-49db-8a8b-8ba0b7eedf3c",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "AB-",
+    "quantity": 110,
+    "min_threshold": 50,
+    "expiry_date": null,
+    "location": null,
+    "last_updated": "2026-04-01T07:10:53.059068+00:00",
+    "created_at": "2026-04-01T07:10:53.059068+00:00",
+    "updated_at": "2026-04-01T07:10:53.059068+00:00"
+  },
+  {
+    "id": "dd659dab-cbeb-4cc1-9304-215dedd57ba7",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "O+",
+    "quantity": 20,
+    "min_threshold": 50,
+    "expiry_date": "2026-04-30",
+    "location": null,
+    "last_updated": "2026-04-01T07:23:14.065322+00:00",
+    "created_at": "2026-04-01T07:23:14.065322+00:00",
+    "updated_at": "2026-04-01T07:23:14.065322+00:00"
+  },
+  {
+    "id": "7e451fce-d93c-461b-b509-0bcc202e6f2d",
+    "org_id": "1fa1539b-694b-4344-9b22-3a2d18ca6b84",
+    "blood_type": "O+",
+    "quantity": 25,
+    "min_threshold": 40,
+    "expiry_date": null,
+    "location": "Main Blood Bank",
+    "last_updated": "2026-06-04T12:55:10.550581+00:00",
+    "created_at": "2026-06-04T12:55:10.550581+00:00",
+    "updated_at": "2026-06-04T12:55:10.550581+00:00"
+  }
+]
