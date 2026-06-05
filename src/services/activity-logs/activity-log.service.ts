@@ -52,7 +52,7 @@ export class ActivityLogService {
       };
 
       // We do not await this heavily or throw if it fails
-      supabase.from('organization_activity_logs').insert(payload).then(({ error }) => {
+      supabase.from('organization_activity_logs').insert(payload as any).then(({ error }) => {
         if (error) {
           console.error('[ActivityLogService] Failed to record activity log asynchronously:', error.message);
         }

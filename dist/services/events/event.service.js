@@ -4,6 +4,7 @@ exports.EventService = void 0;
 const zod_1 = require("zod");
 const event_types_1 = require("./event.types");
 const geo_1 = require("../../utils/geo");
+const activity_log_service_1 = require("../activity-logs/activity-log.service");
 const eventTypeSchema = zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
 const eventStatusSchema = zod_1.z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
 const eventSetupStatusSchema = zod_1.z.enum(['needs_details', 'pending_setup', 'complete']);
@@ -810,6 +811,21 @@ class EventService {
                 },
                 status: created.status,
             });
+            activity_log_service_1.ActivityLogService.recordActivityLog({
+                orgId: created.org_id,
+                actorUserId: actor.id,
+                action: created.creation_method === 'plotting_calendar' ? 'event.plotted' : 'event.created',
+                entityType: 'event',
+                entityId: created.id,
+                entityLabel: created.title,
+                description: `Event "${created.title}" was ${created.creation_method === 'plotting_calendar' ? 'plotted' : 'created'}.`,
+                metadata: {
+                    status: created.status,
+                    event_date: created.event_date,
+                    type: created.type,
+                    creation_method: created.creation_method,
+                },
+            });
             await this.createNotification({
                 org_id: created.org_id,
                 user_id: created.requested_by_user_id,
@@ -986,6 +1002,21 @@ class EventService {
                 },
                 status: updated.status,
             });
+            activity_log_service_1.ActivityLogService.recordActivityLog({
+                orgId: updated.org_id,
+                actorUserId: actor.id,
+                action: updated.status === 'published' ? 'event.published' : 'event.details_completed',
+                entityType: 'event',
+                entityId: updated.id,
+                entityLabel: updated.title,
+                description: `Event "${updated.title}" was ${updated.status === 'published' ? 'published' : 'completed in setup'}.`,
+                metadata: {
+                    before_setup_status: existing.setup_status,
+                    after_setup_status: updated.setup_status,
+                    before_status: existing.status,
+                    after_status: updated.status,
+                },
+            });
             await this.createNotification({
                 org_id: updated.org_id,
                 user_id: updated.requested_by_user_id,
@@ -1108,6 +1139,20 @@ class EventService {
                 status: updated.status,
                 notes: parsed.notes ?? undefined,
             });
+            activity_log_service_1.ActivityLogService.recordActivityLog({
+                orgId: updated.org_id,
+                actorUserId: actor.id,
+                action: 'event.status_updated',
+                entityType: 'event',
+                entityId: updated.id,
+                entityLabel: updated.title,
+                description: `Event "${updated.title}" status changed from ${existing.status} to ${updated.status}.`,
+                metadata: {
+                    before_status: existing.status,
+                    after_status: updated.status,
+                    notes: parsed.notes ?? null,
+                },
+            });
             await this.createNotification({
                 org_id: updated.org_id,
                 user_id: updated.requested_by_user_id,
@@ -1227,6 +1272,18 @@ class EventService {
                 },
                 status: updated.status,
             });
+            activity_log_service_1.ActivityLogService.recordActivityLog({
+                orgId: updated.org_id,
+                actorUserId: actor.id,
+                action: 'event.updated',
+                entityType: 'event',
+                entityId: updated.id,
+                entityLabel: updated.title,
+                description: `Event "${updated.title}" was updated.`,
+                metadata: {
+                    status: updated.status,
+                },
+            });
             return { data: updated, error: null };
         }
         catch (error) {
@@ -1286,6 +1343,19 @@ class EventService {
                 event_date: existing.event_date,
             },
             status: existing.status,
+        });
+        activity_log_service_1.ActivityLogService.recordActivityLog({
+            orgId: existing.org_id,
+            actorUserId: actor.id,
+            action: 'event.deleted',
+            entityType: 'event',
+            entityId: existing.id,
+            entityLabel: existing.title,
+            description: `Event "${existing.title}" was deleted.`,
+            metadata: {
+                status: existing.status,
+                event_date: existing.event_date,
+            },
         });
         return { data: null, error: null };
     }

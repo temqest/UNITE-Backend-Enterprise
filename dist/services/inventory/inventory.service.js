@@ -4,6 +4,7 @@ exports.InventoryService = void 0;
 const zod_1 = require("zod");
 const types_1 = require("../../models/inventory/types");
 const inventory_types_1 = require("./inventory.types");
+const activity_log_service_1 = require("../activity-logs/activity-log.service");
 const DashboardFilterSchema = zod_1.z.object({
     filter: zod_1.z.enum(['all', 'low_stock', 'expiring_soon']).optional(),
     include_recent_transactions: zod_1.z.number().int().min(1).max(100).optional(),
@@ -415,6 +416,21 @@ class InventoryService {
                 error: (0, inventory_types_1.toInventoryError)('INVENTORY_TRANSACTION_WRITE_FAILED', 'Inventory updated but transaction logging failed.', transactionError),
             };
         }
+        activity_log_service_1.ActivityLogService.recordActivityLog({
+            orgId: payload.org_id,
+            actorUserId: payload.performed_by_user_id,
+            action: 'inventory.transaction_created',
+            entityType: 'inventory',
+            entityId: transactionRow.id,
+            entityLabel: `${payload.quantity} units of ${payload.blood_type}`,
+            description: `Recorded inventory transaction: ${payload.transaction_type} of ${payload.quantity} units of ${payload.blood_type}.`,
+            metadata: {
+                transaction_type: payload.transaction_type,
+                blood_type: payload.blood_type,
+                quantity: payload.quantity,
+                direction,
+            },
+        });
         return {
             data: transactionRow,
             error: null,
