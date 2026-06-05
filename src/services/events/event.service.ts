@@ -27,6 +27,7 @@ import {
   toServiceError,
 } from './event.types';
 import { normalizeGeoAreaKey } from '../../utils/geo';
+import { ActivityLogService } from '../activity-logs/activity-log.service';
 
 const eventTypeSchema = z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
 const eventStatusSchema = z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
@@ -975,6 +976,22 @@ export class EventService {
         status: created.status,
       });
 
+      ActivityLogService.recordActivityLog({
+        orgId: created.org_id,
+        actorUserId: actor.id,
+        action: created.creation_method === 'plotting_calendar' ? 'event.plotted' : 'event.created',
+        entityType: 'event',
+        entityId: created.id,
+        entityLabel: created.title,
+        description: `Event "${created.title}" was ${created.creation_method === 'plotting_calendar' ? 'plotted' : 'created'}.`,
+        metadata: {
+          status: created.status,
+          event_date: created.event_date,
+          type: created.type,
+          creation_method: created.creation_method,
+        },
+      });
+
       await this.createNotification({
         org_id: created.org_id,
         user_id: created.requested_by_user_id,
@@ -1166,6 +1183,22 @@ export class EventService {
         status: updated.status,
       });
 
+      ActivityLogService.recordActivityLog({
+        orgId: updated.org_id,
+        actorUserId: actor.id,
+        action: updated.status === 'published' ? 'event.published' : 'event.details_completed',
+        entityType: 'event',
+        entityId: updated.id,
+        entityLabel: updated.title,
+        description: `Event "${updated.title}" was ${updated.status === 'published' ? 'published' : 'completed in setup'}.`,
+        metadata: {
+          before_setup_status: existing.setup_status,
+          after_setup_status: updated.setup_status,
+          before_status: existing.status,
+          after_status: updated.status,
+        },
+      });
+
       await this.createNotification({
         org_id: updated.org_id,
         user_id: updated.requested_by_user_id,
@@ -1302,6 +1335,21 @@ export class EventService {
         notes: parsed.notes ?? undefined,
       });
 
+      ActivityLogService.recordActivityLog({
+        orgId: updated.org_id,
+        actorUserId: actor.id,
+        action: 'event.status_updated',
+        entityType: 'event',
+        entityId: updated.id,
+        entityLabel: updated.title,
+        description: `Event "${updated.title}" status changed from ${existing.status} to ${updated.status}.`,
+        metadata: {
+          before_status: existing.status,
+          after_status: updated.status,
+          notes: parsed.notes ?? null,
+        },
+      });
+
       await this.createNotification({
         org_id: updated.org_id,
         user_id: updated.requested_by_user_id,
@@ -1436,6 +1484,19 @@ export class EventService {
         status: updated.status,
       });
 
+      ActivityLogService.recordActivityLog({
+        orgId: updated.org_id,
+        actorUserId: actor.id,
+        action: 'event.updated',
+        entityType: 'event',
+        entityId: updated.id,
+        entityLabel: updated.title,
+        description: `Event "${updated.title}" was updated.`,
+        metadata: {
+          status: updated.status,
+        },
+      });
+
       return { data: updated, error: null };
     } catch (error) {
       return {
@@ -1503,6 +1564,20 @@ export class EventService {
         event_date: existing.event_date,
       },
       status: existing.status,
+    });
+
+    ActivityLogService.recordActivityLog({
+      orgId: existing.org_id,
+      actorUserId: actor.id,
+      action: 'event.deleted',
+      entityType: 'event',
+      entityId: existing.id,
+      entityLabel: existing.title,
+      description: `Event "${existing.title}" was deleted.`,
+      metadata: {
+        status: existing.status,
+        event_date: existing.event_date,
+      },
     });
 
     return { data: null, error: null };

@@ -2,6 +2,7 @@ import { supabaseServer as supabase } from '../../lib/supabase/supabase.client';
 import { CoverageAreaRow } from '../../models/coverage_areas/types';
 import { ApiError } from '../../lib/async-handler';
 import { normalizeGeoAreaKey } from '../../utils/geo';
+import { ActivityLogService } from '../activity-logs/activity-log.service';
 
 export class CoverageAreasService {
   async listCoverageAreas(orgId: string, filters: { status?: string; area_type?: string; search?: string }) {
@@ -69,6 +70,21 @@ export class CoverageAreasService {
     await this.reconcileEventsForCoverageArea(orgId, data as CoverageAreaRow);
 
     const aggregated = await this.aggregateCoverageData(orgId, [data as CoverageAreaRow]);
+    
+    ActivityLogService.recordActivityLog({
+      orgId,
+      actorUserId: userId,
+      action: 'coverage_area.created',
+      entityType: 'coverage_area',
+      entityId: data.id,
+      entityLabel: data.area_name,
+      description: `Created coverage area "${data.area_name}".`,
+      metadata: {
+        area_name: data.area_name,
+        province: data.province,
+      },
+    });
+
     return aggregated[0];
   }
 
@@ -103,6 +119,21 @@ export class CoverageAreasService {
     await this.reconcileEventsForCoverageArea(orgId, data as CoverageAreaRow);
 
     const aggregated = await this.aggregateCoverageData(orgId, [data as CoverageAreaRow]);
+
+    ActivityLogService.recordActivityLog({
+      orgId,
+      actorUserId: userId,
+      action: 'coverage_area.updated',
+      entityType: 'coverage_area',
+      entityId: data.id,
+      entityLabel: data.area_name,
+      description: `Updated coverage area "${data.area_name}".`,
+      metadata: {
+        area_name: data.area_name,
+        status: payload.status,
+      },
+    });
+
     return aggregated[0];
   }
 
@@ -118,6 +149,14 @@ export class CoverageAreasService {
     if (error) {
       throw new ApiError(500, 'COVERAGE_AREA_DELETE_FAILED', error.message);
     }
+
+    ActivityLogService.recordActivityLog({
+      orgId,
+      action: 'coverage_area.deleted',
+      entityType: 'coverage_area',
+      entityId: id,
+      description: `Deleted coverage area ID: ${id}.`,
+    });
 
     return { success: true };
   }

@@ -43,27 +43,41 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let v1Router = null;
+let requestLoggerMiddleware = null;
+let errorLogger = null;
 
 try {
 	if (process.env.NODE_ENV === 'development') {
 		require('ts-node/register/transpile-only');
 		({ v1Router } = require('./api/v1/routes/v1.routes.ts'));
+		({ requestLoggerMiddleware } = require('./middleware/request-logger.middleware.ts'));
+		({ errorLogger } = require('./utils/logger.ts'));
 	} else {
 		({ v1Router } = require('./api/v1/routes/v1.routes'));
+		({ requestLoggerMiddleware } = require('./middleware/request-logger.middleware'));
+		({ errorLogger } = require('./utils/logger'));
 	}
 } catch (primaryLoadError) {
 	try {
 		if (process.env.NODE_ENV === 'development') {
 			({ v1Router } = require('./api/v1/routes/v1.routes'));
+			({ requestLoggerMiddleware } = require('./middleware/request-logger.middleware'));
+			({ errorLogger } = require('./utils/logger'));
 		} else {
 			require('ts-node/register/transpile-only');
 			({ v1Router } = require('./api/v1/routes/v1.routes.ts'));
+			({ requestLoggerMiddleware } = require('./middleware/request-logger.middleware.ts'));
+			({ errorLogger } = require('./utils/logger.ts'));
 		}
 	} catch (runtimeError) {
 		const primaryMessage = primaryLoadError instanceof Error ? primaryLoadError.message : String(primaryLoadError);
 		const fallbackMessage = runtimeError instanceof Error ? runtimeError.message : String(runtimeError);
 		console.warn('[bootstrap] API router was not loaded:', `${primaryMessage}; fallback: ${fallbackMessage}`);
 	}
+}
+
+if (requestLoggerMiddleware) {
+	app.use(requestLoggerMiddleware);
 }
 
 if (v1Router) {
@@ -77,6 +91,12 @@ app.get('/health', (_req, res) => {
 app.use((err, _req, res, _next) => {
 	const message = err instanceof Error ? err.message : 'Internal server error';
 	const details = process.env.NODE_ENV === 'production' ? undefined : err;
+
+	if (errorLogger) {
+		errorLogger.error({ err, req: _req }, 'Unhandled application error');
+	} else {
+		console.error(err);
+	}
 
 	const statusCode = err.statusCode || 500;
 	res.status(statusCode).json({

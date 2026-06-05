@@ -11,6 +11,8 @@ import { donorRouter } from './donor';
 import { plottingCalendarsRouter } from './plotting-calendars';
 import { coverageAreasRouter } from './coverage-areas';
 import { analyticsRoutes } from './analytics/analytics.routes';
+import { activityLogsRouter } from './activity-logs';
+import { systemRouter } from './system/system.routes';
 
 const v1Router = Router();
 
@@ -26,6 +28,8 @@ v1Router.use('/inventory', inventoryRouter);
 v1Router.use('/donor', donorRouter);
 v1Router.use('/coverage-areas', coverageAreasRouter);
 v1Router.use('/analytics', analyticsRoutes);
+v1Router.use('/activity-logs', activityLogsRouter);
+v1Router.use('/system', systemRouter);
 
 export { v1Router };
 export default v1Router;
