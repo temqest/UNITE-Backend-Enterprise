@@ -56,6 +56,7 @@ export interface SessionUser {
 export interface OrganizationInfo {
   id: string;
   name: string;
+  code?: string;
   is_active: boolean;
   settings?: any;
 }

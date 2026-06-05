@@ -109,7 +109,7 @@ async function getUserOrganization(orgId) {
     try {
         const { data: orgData, error: orgError } = await supabase
             .from('organizations')
-            .select('id, name, is_active, settings')
+            .select('id, name, code, is_active, settings')
             .eq('id', orgId)
             .maybeSingle();
         if (orgError || !orgData) {
@@ -118,6 +118,7 @@ async function getUserOrganization(orgId) {
         return {
             id: orgData.id,
             name: orgData.name,
+            code: orgData.code,
             is_active: orgData.is_active,
             settings: orgData.settings,
         };

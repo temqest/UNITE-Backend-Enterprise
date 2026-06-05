@@ -38,6 +38,15 @@ async function getStaffDetailController(req, res) {
             });
             return;
         }
+        const targetRoleObj = typeof userRaw.role === 'string' ? userRaw.role : userRaw.role?.type;
+        const targetRole = String(targetRoleObj || '');
+        if (targetRole === 'super_admin' && req.user.id !== targetUserId && req.user.role?.type !== 'super_admin') {
+            sendError(res, 403, {
+                code: 'PROTECTED_SUPER_ADMIN',
+                message: 'You do not have permission to view this profile.',
+            });
+            return;
+        }
         // 2. Fetch assigned events via event_staff
         const { data: eventStaff, error: staffError } = await supabase_client_1.supabaseServer
             .from('event_staff')

@@ -164,6 +164,7 @@ async function loginWithEmailPassword(input) {
                 organization = {
                     id: org.id,
                     name: org.name,
+                    code: org.code,
                     is_active: org.is_active,
                     settings: org.settings,
                 };
@@ -289,6 +290,7 @@ async function verifyMagicLink(email, token) {
                 organization = {
                     id: org.id,
                     name: org.name,
+                    code: org.code,
                     is_active: org.is_active,
                     settings: org.settings,
                 };
