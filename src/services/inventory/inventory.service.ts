@@ -13,6 +13,7 @@ import type {
   InventoryBatchTransactionResult,
 } from './inventory.types';
 import { toInventoryError } from './inventory.types';
+import { ActivityLogService } from '../activity-logs/activity-log.service';
 
 const DashboardFilterSchema = z.object({
   filter: z.enum(['all', 'low_stock', 'expiring_soon']).optional(),
@@ -502,6 +503,22 @@ export class InventoryService {
         error: toInventoryError('INVENTORY_TRANSACTION_WRITE_FAILED', 'Inventory updated but transaction logging failed.', transactionError),
       };
     }
+
+    ActivityLogService.recordActivityLog({
+      orgId: payload.org_id,
+      actorUserId: payload.performed_by_user_id,
+      action: 'inventory.transaction_created',
+      entityType: 'inventory',
+      entityId: transactionRow.id,
+      entityLabel: `${payload.quantity} units of ${payload.blood_type}`,
+      description: `Recorded inventory transaction: ${payload.transaction_type} of ${payload.quantity} units of ${payload.blood_type}.`,
+      metadata: {
+        transaction_type: payload.transaction_type,
+        blood_type: payload.blood_type,
+        quantity: payload.quantity,
+        direction,
+      },
+    });
 
     return {
       data: transactionRow as BloodInventoryTransactionRow,
