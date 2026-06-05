@@ -35,6 +35,9 @@ function normalizeSameSite(value) {
     if (normalized === 'strict' || normalized === 'none') {
         return normalized;
     }
+    if (!value && process.env.NODE_ENV === 'production') {
+        return 'none';
+    }
     return 'lax';
 }
 function parsePositiveInt(value, fallback) {

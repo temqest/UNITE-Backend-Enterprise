@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { ActivityLogService } from '../../../../services/activity-logs/activity-log.service';
 
 export const getActivityLogs = async (req: Request, res: Response) => {
-  const { org_id } = req.user!;
+  const { org_id } = (req as any).user!;
   
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = parseInt(req.query.limit as string, 10) || 20;

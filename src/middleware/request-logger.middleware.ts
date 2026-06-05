@@ -75,6 +75,6 @@ export const requestLoggerMiddleware = pinoHttp({
         statusCode: res.statusCode,
       };
     },
-    err: pinoHttp.stdSerializers.err,
+    err: (pinoHttp as any).stdSerializers.err,
   },
 });

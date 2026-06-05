@@ -76,12 +76,12 @@ export class CoverageAreasService {
       actorUserId: userId,
       action: 'coverage_area.created',
       entityType: 'coverage_area',
-      entityId: data.id,
-      entityLabel: data.area_name,
-      description: `Created coverage area "${data.area_name}".`,
+      entityId: (data as any).id,
+      entityLabel: (data as any).area_name,
+      description: `Created coverage area "${(data as any).area_name}".`,
       metadata: {
-        area_name: data.area_name,
-        province: data.province,
+        area_name: (data as any).area_name,
+        province: (data as any).province,
       },
     });
 

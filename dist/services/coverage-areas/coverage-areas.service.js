@@ -4,6 +4,7 @@ exports.coverageAreasService = exports.CoverageAreasService = void 0;
 const supabase_client_1 = require("../../lib/supabase/supabase.client");
 const async_handler_1 = require("../../lib/async-handler");
 const geo_1 = require("../../utils/geo");
+const activity_log_service_1 = require("../activity-logs/activity-log.service");
 class CoverageAreasService {
     async listCoverageAreas(orgId, filters) {
         let query = supabase_client_1.supabaseServer.from('organization_coverage_areas').select('*').eq('org_id', orgId);
@@ -58,6 +59,19 @@ class CoverageAreasService {
         }
         await this.reconcileEventsForCoverageArea(orgId, data);
         const aggregated = await this.aggregateCoverageData(orgId, [data]);
+        activity_log_service_1.ActivityLogService.recordActivityLog({
+            orgId,
+            actorUserId: userId,
+            action: 'coverage_area.created',
+            entityType: 'coverage_area',
+            entityId: data.id,
+            entityLabel: data.area_name,
+            description: `Created coverage area "${data.area_name}".`,
+            metadata: {
+                area_name: data.area_name,
+                province: data.province,
+            },
+        });
         return aggregated[0];
     }
     async updateCoverageArea(id, orgId, userId, payload) {
@@ -86,6 +100,19 @@ class CoverageAreasService {
         // Attempt to reconcile any existing unlinked events that might match the updated geo identity
         await this.reconcileEventsForCoverageArea(orgId, data);
         const aggregated = await this.aggregateCoverageData(orgId, [data]);
+        activity_log_service_1.ActivityLogService.recordActivityLog({
+            orgId,
+            actorUserId: userId,
+            action: 'coverage_area.updated',
+            entityType: 'coverage_area',
+            entityId: data.id,
+            entityLabel: data.area_name,
+            description: `Updated coverage area "${data.area_name}".`,
+            metadata: {
+                area_name: data.area_name,
+                status: payload.status,
+            },
+        });
         return aggregated[0];
     }
     async deleteCoverageArea(id, orgId) {
@@ -98,6 +125,13 @@ class CoverageAreasService {
         if (error) {
             throw new async_handler_1.ApiError(500, 'COVERAGE_AREA_DELETE_FAILED', error.message);
         }
+        activity_log_service_1.ActivityLogService.recordActivityLog({
+            orgId,
+            action: 'coverage_area.deleted',
+            entityType: 'coverage_area',
+            entityId: id,
+            description: `Deleted coverage area ID: ${id}.`,
+        });
         return { success: true };
     }
     async reconcileEventsForCoverageArea(orgId, coverageArea) {
