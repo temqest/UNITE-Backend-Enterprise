@@ -142,6 +142,10 @@ export async function listStaffController(req: Request, res: Response): Promise<
       query = query.eq('role->>type', roleFilter);
     }
 
+    if (req.user.role?.type !== 'super_admin') {
+      query = query.neq('role->>type', 'super_admin');
+    }
+
     if (search) {
       const escaped = search.replace(/[%_]/g, '\\$&');
       query = query.or(`first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
@@ -291,15 +295,22 @@ export async function updateStaffManagementController(req: Request, res: Respons
     const targetRole = String(targetRoleObj || '');
     const isSelf = targetUserId === req.user.id;
 
-    let allowed = false;
-    if (isSelf) allowed = true;
-    else if (actorRole === 'super_admin') allowed = true;
-    else if (actorRole === 'admin') allowed = targetRole !== 'admin' && targetRole !== 'super_admin';
-    else if (actorRole === 'coordinator') allowed = targetRole === 'stakeholder';
+    if (targetRole === 'super_admin') {
+      if (!isSelf) {
+        sendError(res, 403, { code: 'PROTECTED_SUPER_ADMIN', message: 'You do not have permission to modify a super admin account.' });
+        return;
+      }
+    } else {
+      let allowed = false;
+      if (isSelf) allowed = true;
+      else if (actorRole === 'super_admin') allowed = true;
+      else if (actorRole === 'admin') allowed = targetRole !== 'admin' && targetRole !== 'super_admin';
+      else if (actorRole === 'coordinator') allowed = targetRole === 'stakeholder';
 
-    if (!allowed) {
-      sendError(res, 403, { code: 'FORBIDDEN', message: 'You do not have permission to update this user.' });
-      return;
+      if (!allowed) {
+        sendError(res, 403, { code: 'FORBIDDEN', message: 'You do not have permission to update this user.' });
+        return;
+      }
     }
 
     const body = req.body ?? {};
@@ -344,6 +355,10 @@ export async function updateStaffManagementController(req: Request, res: Respons
 
     const incomingRole = normalizeOptionalText(body.role);
     if (incomingRole !== undefined) {
+      if (targetRole === 'super_admin') {
+        sendError(res, 403, { code: 'CANNOT_MODIFY_SUPER_ADMIN_ROLE', message: 'Super admin role cannot be modified.' });
+        return;
+      }
       patch.role = buildRoleFromInput(incomingRole);
     }
 
@@ -459,12 +474,12 @@ export async function deleteStaffManagementController(req: Request, res: Respons
 
     const { data: targetUserRaw, error: targetError } = await supabaseServer
       .from('users')
-      .select('id, auth_id, org_id')
+      .select('id, auth_id, org_id, role')
       .eq('id', targetUserId)
       .eq('org_id', req.user.org_id)
       .maybeSingle();
 
-    const targetUser = targetUserRaw as { auth_id?: string } | null;
+    const targetUser = targetUserRaw as { auth_id?: string; role?: unknown } | null;
 
     if (targetError || !targetUser) {
       sendError(res, 404, {
@@ -472,6 +487,14 @@ export async function deleteStaffManagementController(req: Request, res: Respons
         message: 'Staff user not found.',
         details: targetError,
       });
+      return;
+    }
+
+    const targetRoleObj = typeof targetUser.role === 'string' ? targetUser.role : (targetUser.role as { type?: string })?.type;
+    const targetRole = String(targetRoleObj || '');
+
+    if (targetRole === 'super_admin') {
+      sendError(res, 403, { code: 'CANNOT_DELETE_SUPER_ADMIN', message: 'Super admin accounts cannot be deleted.' });
       return;
     }
 

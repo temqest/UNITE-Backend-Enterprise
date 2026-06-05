@@ -199,6 +199,7 @@ export async function loginWithEmailPassword(
         organization = {
           id: org.id,
           name: org.name,
+          code: org.code,
           is_active: org.is_active,
           settings: org.settings,
         };
@@ -339,6 +340,7 @@ export async function verifyMagicLink(
         organization = {
           id: org.id,
           name: org.name,
+          code: org.code,
           is_active: org.is_active,
           settings: org.settings,
         };

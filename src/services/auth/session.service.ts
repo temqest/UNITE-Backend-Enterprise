@@ -138,7 +138,7 @@ export async function getUserOrganization(orgId: string): Promise<OrganizationIn
   try {
     const { data: orgData, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, is_active, settings')
+      .select('id, name, code, is_active, settings')
       .eq('id', orgId)
       .maybeSingle();
 
@@ -149,6 +149,7 @@ export async function getUserOrganization(orgId: string): Promise<OrganizationIn
     return {
       id: orgData.id,
       name: orgData.name,
+      code: orgData.code,
       is_active: orgData.is_active,
       settings: orgData.settings,
     };
