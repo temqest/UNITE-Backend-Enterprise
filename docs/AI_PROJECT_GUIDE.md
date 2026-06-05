@@ -529,6 +529,29 @@ Never commit real secrets. Do not document actual values here.
 
 **Mismatch note:** `lib/api.ts` falls back to `http://localhost:3000` if env vars are unset; backend default is `6900`. Set `NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:6900` locally.
 
+### Deployment & Production Rules
+
+When deploying to different domains (e.g. Vercel for frontend, Render for backend), the following rules apply for session persistence and CORS:
+
+1. **Frontend Env Vars**:
+   - `NEXT_PUBLIC_BACKEND_BASE_URL`: Must be the deployed backend URL (e.g., `https://api.example.com`).
+   - `NEXT_PUBLIC_APP_URL`: Must be the deployed frontend origin.
+
+2. **Backend Env Vars**:
+   - `CORS_ALLOWED_ORIGINS`: Must include the exact deployed frontend origin (e.g., `https://frontend.vercel.app`). Do not use `*`.
+   - `FRONTEND_URL`: Must be the deployed frontend origin.
+   - `AUTH_COOKIE_SAME_SITE`: Should be set to `none`. (The backend will default to `none` if `NODE_ENV=production`, but explicitly setting it is safest).
+
+3. **Production Cookie & CORS Behavior**:
+   - Refresh tokens are stored in an httpOnly cookie. For cross-origin requests, `SameSite=None` and `Secure=true` are strictly enforced by the browser.
+   - All authenticated frontend `fetch` requests must use `credentials: "include"`, which is configured globally in `lib/api.ts`.
+   - The backend `cors` middleware is configured with `credentials: true`.
+
+4. **Session Refresh Behavior**:
+   - The React `AuthProvider` calls `/api/v1/auth/refresh` on app startup and sends the `unite_refresh_token` cookie.
+   - If successful, it receives a short-lived access token, saving it to memory and local storage.
+   - If the frontend and backend domains mismatch and CORS/Cookie settings are misconfigured, this refresh request will silently fail, dropping the user session on every page reload.
+
 ---
 
 ## 9. Design System Notes
