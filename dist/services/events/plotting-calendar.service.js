@@ -6,6 +6,7 @@ const crypto_1 = require("crypto");
 const zod_1 = require("zod");
 const event_types_1 = require("./event.types");
 const event_service_1 = require("./event.service");
+const constants_1 = require("../../models/events/constants");
 const timeSchema = zod_1.z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/);
 const slotSchema = zod_1.z.object({
     label: zod_1.z.string().trim().optional(),
@@ -20,11 +21,11 @@ const slotSchema = zod_1.z.object({
         });
     }
 });
-const calendarStatusSchema = zod_1.z.enum(['active', 'closed', 'expired', 'archived']);
-const accessTypeSchema = zod_1.z.enum(['org', 'users', 'organizations', 'share_token', 'organization_link']);
-const dayStatusSchema = zod_1.z.enum(['open', 'unavailable', 'fully_booked']);
-const slotStatusSchema = zod_1.z.enum(['open', 'unavailable', 'fully_booked']);
-const availabilityModeSchema = zod_1.z.enum(['flexible', 'slots']);
+const calendarStatusSchema = zod_1.z.enum(constants_1.PLOTTING_CALENDAR_STATUSES);
+const accessTypeSchema = zod_1.z.enum(constants_1.ACCESS_TYPES);
+const dayStatusSchema = zod_1.z.enum(constants_1.DAY_STATUSES);
+const slotStatusSchema = zod_1.z.enum(constants_1.SLOT_STATUSES);
+const availabilityModeSchema = zod_1.z.enum(constants_1.AVAILABILITY_MODES);
 const DEFAULT_FLEXIBLE_START = '08:00';
 const DEFAULT_FLEXIBLE_END = '17:00';
 const PlottingCalendarCreateSchema = zod_1.z.object({
@@ -33,7 +34,7 @@ const PlottingCalendarCreateSchema = zod_1.z.object({
     description: zod_1.z.string().trim().optional().nullable(),
     allowed_dates: zod_1.z.array(zod_1.z.string().date()).optional().default([]),
     allowed_time_slots: zod_1.z.array(slotSchema).optional().default([]),
-    allowed_event_types: zod_1.z.array(zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).min(1),
+    allowed_event_types: zod_1.z.array(zod_1.z.enum(constants_1.EVENT_TYPES)).min(1),
     max_events_per_date: zod_1.z.number().int().positive().optional().nullable(),
     max_events_per_slot: zod_1.z.number().int().positive().optional().nullable(),
     access_type: accessTypeSchema.optional(),
@@ -49,7 +50,7 @@ const PlottingCalendarUpdateSchema = zod_1.z.object({
     description: zod_1.z.string().trim().optional().nullable(),
     allowed_dates: zod_1.z.array(zod_1.z.string().date()).optional(),
     allowed_time_slots: zod_1.z.array(slotSchema).optional(),
-    allowed_event_types: zod_1.z.array(zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly'])).optional(),
+    allowed_event_types: zod_1.z.array(zod_1.z.enum(constants_1.EVENT_TYPES)).optional(),
     max_events_per_date: zod_1.z.number().int().positive().optional().nullable(),
     max_events_per_slot: zod_1.z.number().int().positive().optional().nullable(),
     access_type: accessTypeSchema.optional(),
@@ -119,7 +120,7 @@ const AvailabilityUpdateSchema = zod_1.z.object({
 });
 const PlotEventSchema = zod_1.z.object({
     title: zod_1.z.string().trim().min(3),
-    type: zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly']),
+    type: zod_1.z.enum(constants_1.EVENT_TYPES),
     event_date: zod_1.z.string().date(),
     start_time: timeSchema,
     end_time: timeSchema,

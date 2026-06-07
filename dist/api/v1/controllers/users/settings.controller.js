@@ -4,6 +4,7 @@ exports.getOrganizationSettingsController = getOrganizationSettingsController;
 exports.updateOrganizationSettingsController = updateOrganizationSettingsController;
 exports.getUserSettingsController = getUserSettingsController;
 exports.updateUserSettingsController = updateUserSettingsController;
+exports.verifyFeaturePinController = verifyFeaturePinController;
 const zod_1 = require("zod");
 const supabase_client_1 = require("../../../../lib/supabase/supabase.client");
 const organization_settings_service_1 = require("../../../../services/settings/organization-settings.service");
@@ -259,6 +260,48 @@ async function updateUserSettingsController(req, res) {
         sendError(res, 500, {
             code: 'USER_SETTINGS_UPDATE_ERROR',
             message: 'Unexpected error while updating user settings.',
+            details: error,
+        });
+    }
+}
+async function verifyFeaturePinController(req, res) {
+    try {
+        if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+            sendError(res, 401, {
+                code: 'UNAUTHORIZED',
+                message: 'Active authenticated organization user required.',
+            });
+            return;
+        }
+        if (!canManageOrgSettings(req.user)) {
+            sendError(res, 403, {
+                code: 'FORBIDDEN',
+                message: 'You do not have permission to manage features.',
+            });
+            return;
+        }
+        const { pin } = req.body ?? {};
+        if (!pin || typeof pin !== 'string') {
+            sendError(res, 400, {
+                code: 'VALIDATION_ERROR',
+                message: 'PIN is required.',
+            });
+            return;
+        }
+        const expectedPin = process.env.FEATURE_MANAGEMENT_PIN || '123456';
+        if (pin !== expectedPin) {
+            sendError(res, 400, {
+                code: 'INVALID_PIN',
+                message: 'Invalid security code.',
+            });
+            return;
+        }
+        res.status(200).json({ success: true, data: { verified: true } });
+    }
+    catch (error) {
+        sendError(res, 500, {
+            code: 'VERIFY_PIN_ERROR',
+            message: 'Unexpected error while verifying PIN.',
             details: error,
         });
     }
