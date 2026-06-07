@@ -2,14 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EventService = void 0;
 const zod_1 = require("zod");
+const event_validation_service_1 = require("./event-validation.service");
 const event_types_1 = require("./event.types");
 const geo_1 = require("../../utils/geo");
 const activity_log_service_1 = require("../activity-logs/activity-log.service");
-const eventTypeSchema = zod_1.z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
-const eventStatusSchema = zod_1.z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
-const eventSetupStatusSchema = zod_1.z.enum(['needs_details', 'pending_setup', 'complete']);
-const eventCreationMethodSchema = zod_1.z.enum(['manual', 'plotting_calendar']);
-const eventVisibilitySchema = zod_1.z.enum(['internal', 'public']);
+const constants_1 = require("../../models/events/constants");
+const eventTypeSchema = zod_1.z.enum(constants_1.EVENT_TYPES);
+const eventStatusSchema = zod_1.z.enum(constants_1.EVENT_STATUSES);
+const eventSetupStatusSchema = zod_1.z.enum(constants_1.EVENT_SETUP_STATUSES);
+const eventCreationMethodSchema = zod_1.z.enum(constants_1.EVENT_CREATION_METHODS);
+const eventVisibilitySchema = zod_1.z.enum(constants_1.EVENT_VISIBILITIES);
 const EventCreateSchema = zod_1.z.object({
     org_id: zod_1.z.string().uuid(),
     title: zod_1.z.string().trim().min(3),
@@ -227,8 +229,10 @@ function isPublishedVisibility(event) {
 }
 class EventService {
     supabase;
+    validator;
     constructor(supabase) {
         this.supabase = supabase;
+        this.validator = new event_validation_service_1.EventValidationService(supabase);
     }
     async autoMatchCoverageArea(orgId, event) {
         if (event.coverage_area_id) {
@@ -312,101 +316,6 @@ class EventService {
             error: null,
         };
     }
-    async getOrganizationSettings(orgId) {
-        const { data, error } = await this.supabase
-            .from('organization_settings')
-            .select('*')
-            .eq('org_id', orgId)
-            .maybeSingle();
-        if (error) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('ORG_SETTINGS_LOOKUP_FAILED', 'Failed to fetch organization settings.', error),
-            };
-        }
-        return { data: data ?? null, error: null };
-    }
-    parseTimeToMinutes(timeValue) {
-        const [hours, minutes] = timeValue.split(':');
-        return Number(hours) * 60 + Number(minutes);
-    }
-    async validateCreationAgainstSettings(payload, settings) {
-        if (!settings) {
-            return { data: true, error: null };
-        }
-        const eventDate = new Date(`${payload.event_date}T00:00:00.000Z`);
-        const now = new Date();
-        const daysDiff = Math.floor((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysDiff < settings.event_request_advance_days) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('ADVANCE_DAYS_VIOLATION', `Event must be created at least ${settings.event_request_advance_days} days in advance.`),
-            };
-        }
-        const dayOfWeek = eventDate.getUTCDay();
-        const bannedDays = settings.banned_days_of_week ?? [];
-        if (bannedDays.includes(dayOfWeek)) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('BANNED_DAY_VIOLATION', 'Selected event day is not allowed by organization settings.'),
-            };
-        }
-        const bannedDates = new Set((settings.banned_specific_dates ?? []).map((value) => value.trim()));
-        if (bannedDates.has(payload.event_date)) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('BANNED_DATE_VIOLATION', 'Selected event date is blocked by organization settings.'),
-            };
-        }
-        if (!settings.allow_weekend_events && (dayOfWeek === 0 || dayOfWeek === 6)) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('WEEKEND_NOT_ALLOWED', 'Weekend events are not allowed for this organization.'),
-            };
-        }
-        const activeStatuses = ['plotted', 'needs_details', 'scheduled', 'published', 'ongoing'];
-        const { data: sameDayEvents, error: sameDayError } = await this.supabase
-            .from('events')
-            .select('id, start_time, end_time')
-            .eq('org_id', payload.org_id)
-            .eq('event_date', payload.event_date)
-            .in('status', activeStatuses);
-        if (sameDayError) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('EVENT_COUNT_LOOKUP_FAILED', 'Failed to validate organization event limits.', sameDayError),
-            };
-        }
-        const filteredSameDayEvents = (sameDayEvents ?? [])
-            .filter((event) => event.id !== payload.exclude_event_id);
-        if (payload.creation_method !== 'plotting_calendar') {
-            if (filteredSameDayEvents.length >= settings.max_events_per_day) {
-                return {
-                    data: null,
-                    error: (0, event_types_1.toServiceError)('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
-                };
-            }
-            if (settings.prevent_double_booking_same_day) {
-                const start = this.parseTimeToMinutes(payload.start_time);
-                const end = this.parseTimeToMinutes(payload.end_time);
-                const hasOverlap = filteredSameDayEvents.some((existing) => {
-                    if (!existing.start_time || !existing.end_time) {
-                        return false;
-                    }
-                    const existingStart = this.parseTimeToMinutes(existing.start_time);
-                    const existingEnd = this.parseTimeToMinutes(existing.end_time);
-                    return start < existingEnd && end > existingStart;
-                });
-                if (hasOverlap) {
-                    return {
-                        data: null,
-                        error: (0, event_types_1.toServiceError)('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
-                    };
-                }
-            }
-        }
-        return { data: true, error: null };
-    }
     async createNotification(params) {
         await this.supabase.from('notifications').insert({
             org_id: params.org_id,
@@ -477,27 +386,6 @@ class EventService {
         }
         return { data: true, error: null };
     }
-    async validatePublishReadiness(event) {
-        const missing = [];
-        if (!event.title?.trim())
-            missing.push('Event title');
-        if (!event.type)
-            missing.push('Event type');
-        if (!event.event_date)
-            missing.push('Event date');
-        if (!event.hosting_organization?.trim())
-            missing.push('Hosting organization');
-        if (!event.coverage_area_boundary_id && !event.coverage_area_municipality) {
-            missing.push('Event Area (City / Municipality)');
-        }
-        if (missing.length > 0) {
-            return {
-                data: null,
-                error: (0, event_types_1.toServiceError)('EVENT_SETUP_INCOMPLETE', 'Please complete the required fields before publishing.', { missing }),
-            };
-        }
-        return { data: true, error: null };
-    }
     canViewOrgEvent(actor, event) {
         const sameOrg = event.org_id === actor.org_id;
         if (!sameOrg) {
@@ -532,23 +420,6 @@ class EventService {
     canCancelEvent(actor) {
         return this.canPublishEvent(actor) || (0, event_types_1.hasPermission)(actor, 'events.update');
     }
-    async validateEventWindow(event) {
-        if (!event.start_time || !event.end_time) {
-            return { data: true, error: null };
-        }
-        const settingsResult = await this.getOrganizationSettings(event.org_id);
-        if (settingsResult.error) {
-            return { data: null, error: settingsResult.error };
-        }
-        return this.validateCreationAgainstSettings({
-            org_id: event.org_id,
-            event_date: event.event_date,
-            start_time: event.start_time,
-            end_time: event.end_time,
-            exclude_event_id: event.id,
-            creation_method: event.creation_method,
-        }, settingsResult.data);
-    }
     async getEventById(eventId, actor) {
         const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
         if (error || !data) {
@@ -573,7 +444,7 @@ class EventService {
         if (!this.canViewOrgEvent(actor, event)) {
             return {
                 data: null,
-                error: (0, event_types_1.toServiceError)('PERMISSION_DENIED', 'You do not have permission to view this event.'),
+                error: (0, event_types_1.toServiceError)('UNAUTHORIZED_ACCESS', 'You do not have permission to view this event. It belongs to another organization.'),
             };
         }
         const enriched = await this.enrichEvents([event]);
@@ -740,12 +611,12 @@ class EventService {
                 eventForValidation.coverage_area_normalized_key = null; // Enforce null if empty string
             }
             eventForValidation.coverage_area_id = await this.autoMatchCoverageArea(parsed.org_id, eventForValidation);
-            const windowCheck = await this.validateEventWindow(eventForValidation);
+            const windowCheck = await this.validator.validateEventWindow(eventForValidation);
             if (windowCheck.error) {
                 return { data: null, error: windowCheck.error };
             }
             if (status === 'scheduled' || status === 'published') {
-                const readiness = await this.validatePublishReadiness(eventForValidation);
+                const readiness = await this.validator.validatePublishReadiness(eventForValidation);
                 if (readiness.error) {
                     return { data: null, error: readiness.error };
                 }
@@ -953,12 +824,12 @@ class EventService {
                     error: (0, event_types_1.toServiceError)('INVALID_STATUS_TRANSITION', `Invalid status transition: ${existing.status} -> ${candidate.status}.`),
                 };
             }
-            const windowCheck = await this.validateEventWindow(candidate);
+            const windowCheck = await this.validator.validateEventWindow(candidate);
             if (windowCheck.error) {
                 return { data: null, error: windowCheck.error };
             }
             if (candidate.status === 'scheduled' || candidate.status === 'published') {
-                const readiness = await this.validatePublishReadiness(candidate);
+                const readiness = await this.validator.validatePublishReadiness(candidate);
                 if (readiness.error) {
                     return { data: null, error: readiness.error };
                 }
@@ -1100,7 +971,7 @@ class EventService {
                 is_public: isPublic,
             };
             if (parsed.status === 'scheduled' || parsed.status === 'published') {
-                const readiness = await this.validatePublishReadiness(candidate);
+                const readiness = await this.validator.validatePublishReadiness(candidate);
                 if (readiness.error) {
                     return { data: null, error: readiness.error };
                 }
@@ -1231,12 +1102,12 @@ class EventService {
             }
             candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
             parsed.coverage_area_id = candidate.coverage_area_id;
-            const windowCheck = await this.validateEventWindow(candidate);
+            const windowCheck = await this.validator.validateEventWindow(candidate);
             if (windowCheck.error) {
                 return { data: null, error: windowCheck.error };
             }
             if (candidate.status === 'scheduled' || candidate.status === 'published') {
-                const readiness = await this.validatePublishReadiness(candidate);
+                const readiness = await this.validator.validatePublishReadiness(candidate);
                 if (readiness.error) {
                     return { data: null, error: readiness.error };
                 }
@@ -1370,7 +1241,7 @@ class EventService {
                 .order('event_date', { ascending: true })
                 .order('start_time', { ascending: true })
                 .range(offset, offset + limit - 1);
-            query = parsed.org_id ? query.eq('org_id', parsed.org_id) : query.eq('org_id', actor.org_id);
+            query = query.eq('org_id', actor.org_id);
             if (parsed.statuses?.length) {
                 query = query.in('status', parsed.statuses);
             }

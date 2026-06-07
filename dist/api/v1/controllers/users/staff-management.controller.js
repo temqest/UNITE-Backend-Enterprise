@@ -221,6 +221,13 @@ async function updateStaffManagementController(req, res) {
             });
             return;
         }
+        if (existingUser.org_id !== req.user.org_id) {
+            sendError(res, 403, {
+                code: 'UNAUTHORIZED_ACCESS',
+                message: 'You do not have permission to access this resource. It belongs to another organization.',
+            });
+            return;
+        }
         // Implement granular edit permissions
         const actorRole = req.user.role?.type || '';
         const targetRoleObj = typeof existingUser.role === 'string' ? existingUser.role : existingUser.role?.type;
@@ -386,7 +393,6 @@ async function deleteStaffManagementController(req, res) {
             .from('users')
             .select('id, auth_id, org_id, role')
             .eq('id', targetUserId)
-            .eq('org_id', req.user.org_id)
             .maybeSingle();
         const targetUser = targetUserRaw;
         if (targetError || !targetUser) {
@@ -394,6 +400,13 @@ async function deleteStaffManagementController(req, res) {
                 code: 'USER_NOT_FOUND',
                 message: 'Staff user not found.',
                 details: targetError,
+            });
+            return;
+        }
+        if (targetUser.org_id !== req.user.org_id) {
+            sendError(res, 403, {
+                code: 'UNAUTHORIZED_ACCESS',
+                message: 'You do not have permission to access this resource. It belongs to another organization.',
             });
             return;
         }

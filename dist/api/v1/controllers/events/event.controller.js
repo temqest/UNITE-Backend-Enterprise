@@ -129,7 +129,7 @@ async function quickCreateEventController(req, res) {
         const actor = toActor(user);
         const result = await eventService.quickCreateEvent(actor, {
             ...(req.body ?? {}),
-            org_id: typeof req.body?.org_id === 'string' ? req.body.org_id : user.org_id,
+            org_id: user.org_id,
         });
         if (result.error || !result.data) {
             sendError(res, 400, {
@@ -173,7 +173,7 @@ async function createEventController(req, res) {
         const actor = toActor(user);
         const payload = {
             ...validated.data,
-            org_id: validated.data.org_id ?? user.org_id,
+            org_id: user.org_id,
             creation_method: 'manual',
             extra_data: validated.data.extra_data ?? {},
         };
@@ -208,7 +208,7 @@ async function getEventsController(req, res) {
         const statusQuery = query.statuses ?? query.status;
         const typeQuery = query.types ?? query.type;
         const filter = {
-            org_id: typeof query.org_id === 'string' && query.org_id.trim().length > 0 ? query.org_id : user.org_id,
+            org_id: user.org_id,
             statuses: parseStringArray(statusQuery),
             setup_statuses: parseStringArray(query.setup_status ?? query.setup_statuses),
             creation_methods: parseStringArray(query.creation_method ?? query.creation_methods),
@@ -216,7 +216,7 @@ async function getEventsController(req, res) {
             from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
             to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
             requested_by_user_id: typeof query.requested_by_user_id === 'string' ? query.requested_by_user_id : undefined,
-            include_public: query.include_public === 'true' || query.include_public === true,
+            include_public: false, // Strictly confine operational data to the organization scope
             hosting_organization: typeof query.hosting_organization === 'string' ? query.hosting_organization : undefined,
             search: typeof query.search === 'string' ? query.search : undefined,
             limit: typeof query.limit === 'string' ? Number(query.limit) : undefined,

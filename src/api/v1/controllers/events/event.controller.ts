@@ -258,7 +258,7 @@ export async function getEventsController(req: Request, res: Response): Promise<
       from_date: typeof query.from_date === 'string' ? query.from_date : undefined,
       to_date: typeof query.to_date === 'string' ? query.to_date : undefined,
       requested_by_user_id: typeof query.requested_by_user_id === 'string' ? query.requested_by_user_id : undefined,
-      include_public: query.include_public === 'true' || query.include_public === true,
+      include_public: false, // Strictly confine operational data to the organization scope
       hosting_organization: typeof query.hosting_organization === 'string' ? query.hosting_organization : undefined,
       search: typeof query.search === 'string' ? query.search : undefined,
       limit: typeof query.limit === 'string' ? Number(query.limit) : undefined,

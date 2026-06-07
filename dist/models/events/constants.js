@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AVAILABILITY_MODES = exports.EVENT_VISIBILITIES = exports.EVENT_CREATION_METHODS = exports.EVENT_SETUP_STATUSES = exports.EVENT_STATUSES = exports.SLOT_STATUSES = exports.DAY_STATUSES = exports.ACCESS_TYPES = exports.PLOTTING_CALENDAR_STATUSES = exports.EVENT_TYPES = void 0;
+exports.EVENT_TYPES = ['blood_drive', 'training', 'advocacy', 'assembly'];
+exports.PLOTTING_CALENDAR_STATUSES = ['active', 'closed', 'expired', 'archived'];
+exports.ACCESS_TYPES = ['org', 'users', 'organizations', 'share_token', 'organization_link'];
+exports.DAY_STATUSES = ['open', 'unavailable', 'fully_booked'];
+exports.SLOT_STATUSES = ['open', 'unavailable', 'fully_booked'];
+exports.EVENT_STATUSES = ['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'];
+exports.EVENT_SETUP_STATUSES = ['needs_details', 'pending_setup', 'complete'];
+exports.EVENT_CREATION_METHODS = ['manual', 'plotting_calendar'];
+exports.EVENT_VISIBILITIES = ['internal', 'public'];
+exports.AVAILABILITY_MODES = ['flexible', 'slots'];
