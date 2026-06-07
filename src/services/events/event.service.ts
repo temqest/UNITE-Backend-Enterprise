@@ -10,6 +10,7 @@ import type {
 } from '../../models/events/types';
 import type { OrganizationSettingsRow } from '../../models/organization_settings/types';
 import type { UserRow } from '../../models/users/types';
+import { EventValidationService } from './event-validation.service';
 import type {
   EventActorContext,
   EventFilter,
@@ -28,12 +29,19 @@ import {
 } from './event.types';
 import { normalizeGeoAreaKey } from '../../utils/geo';
 import { ActivityLogService } from '../activity-logs/activity-log.service';
+import {
+  EVENT_TYPES,
+  EVENT_STATUSES,
+  EVENT_SETUP_STATUSES,
+  EVENT_CREATION_METHODS,
+  EVENT_VISIBILITIES
+} from '../../models/events/constants';
 
-const eventTypeSchema = z.enum(['blood_drive', 'training', 'advocacy', 'assembly']);
-const eventStatusSchema = z.enum(['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled']);
-const eventSetupStatusSchema = z.enum(['needs_details', 'pending_setup', 'complete']);
-const eventCreationMethodSchema = z.enum(['manual', 'plotting_calendar']);
-const eventVisibilitySchema = z.enum(['internal', 'public']);
+const eventTypeSchema = z.enum(EVENT_TYPES);
+const eventStatusSchema = z.enum(EVENT_STATUSES);
+const eventSetupStatusSchema = z.enum(EVENT_SETUP_STATUSES);
+const eventCreationMethodSchema = z.enum(EVENT_CREATION_METHODS);
+const eventVisibilitySchema = z.enum(EVENT_VISIBILITIES);
 
 const EventCreateSchema = z.object({
   org_id: z.string().uuid(),
@@ -270,7 +278,11 @@ function isPublishedVisibility(event: Pick<EventRow, 'status' | 'visibility' | '
 }
 
 export class EventService {
-  constructor(private readonly supabase: SupabaseClient) {}
+  private validator: EventValidationService;
+
+  constructor(private readonly supabase: SupabaseClient) {
+    this.validator = new EventValidationService(supabase);
+  }
 
   private async autoMatchCoverageArea(orgId: string, event: Partial<EventRow>): Promise<string | null> {
     if (event.coverage_area_id) {
@@ -368,125 +380,7 @@ export class EventService {
     };
   }
 
-  private async getOrganizationSettings(orgId: string): Promise<ServiceResult<OrganizationSettingsRow | null>> {
-    const { data, error } = await this.supabase
-      .from('organization_settings')
-      .select('*')
-      .eq('org_id', orgId)
-      .maybeSingle();
 
-    if (error) {
-      return {
-        data: null,
-        error: toServiceError('ORG_SETTINGS_LOOKUP_FAILED', 'Failed to fetch organization settings.', error),
-      };
-    }
-
-    return { data: (data as OrganizationSettingsRow | null) ?? null, error: null };
-  }
-
-  private parseTimeToMinutes(timeValue: string): number {
-    const [hours, minutes] = timeValue.split(':');
-    return Number(hours) * 60 + Number(minutes);
-  }
-
-  private async validateCreationAgainstSettings(
-    payload: { org_id: string; event_date: string; start_time: string; end_time: string; exclude_event_id?: string; creation_method?: string },
-    settings: OrganizationSettingsRow | null
-  ): Promise<ServiceResult<true>> {
-    if (!settings) {
-      return { data: true, error: null };
-    }
-
-    const eventDate = new Date(`${payload.event_date}T00:00:00.000Z`);
-    const now = new Date();
-    const daysDiff = Math.floor((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysDiff < settings.event_request_advance_days) {
-      return {
-        data: null,
-        error: toServiceError(
-          'ADVANCE_DAYS_VIOLATION',
-          `Event must be created at least ${settings.event_request_advance_days} days in advance.`
-        ),
-      };
-    }
-
-    const dayOfWeek = eventDate.getUTCDay();
-    const bannedDays = settings.banned_days_of_week ?? [];
-    if (bannedDays.includes(dayOfWeek)) {
-      return {
-        data: null,
-        error: toServiceError('BANNED_DAY_VIOLATION', 'Selected event day is not allowed by organization settings.'),
-      };
-    }
-
-    const bannedDates = new Set((settings.banned_specific_dates ?? []).map((value) => value.trim()));
-    if (bannedDates.has(payload.event_date)) {
-      return {
-        data: null,
-        error: toServiceError('BANNED_DATE_VIOLATION', 'Selected event date is blocked by organization settings.'),
-      };
-    }
-
-    if (!settings.allow_weekend_events && (dayOfWeek === 0 || dayOfWeek === 6)) {
-      return {
-        data: null,
-        error: toServiceError('WEEKEND_NOT_ALLOWED', 'Weekend events are not allowed for this organization.'),
-      };
-    }
-
-    const activeStatuses: EventStatus[] = ['plotted', 'needs_details', 'scheduled', 'published', 'ongoing'];
-    const { data: sameDayEvents, error: sameDayError } = await this.supabase
-      .from('events')
-      .select('id, start_time, end_time')
-      .eq('org_id', payload.org_id)
-      .eq('event_date', payload.event_date)
-      .in('status', activeStatuses);
-
-    if (sameDayError) {
-      return {
-        data: null,
-        error: toServiceError('EVENT_COUNT_LOOKUP_FAILED', 'Failed to validate organization event limits.', sameDayError),
-      };
-    }
-
-    const filteredSameDayEvents = ((sameDayEvents ?? []) as Array<{ id: string; start_time: string | null; end_time: string | null }>)
-      .filter((event) => event.id !== payload.exclude_event_id);
-
-    if (payload.creation_method !== 'plotting_calendar') {
-      if (filteredSameDayEvents.length >= settings.max_events_per_day) {
-        return {
-          data: null,
-          error: toServiceError('MAX_EVENTS_PER_DAY_EXCEEDED', 'Maximum events per day has been reached.'),
-        };
-      }
-
-      if (settings.prevent_double_booking_same_day) {
-        const start = this.parseTimeToMinutes(payload.start_time);
-        const end = this.parseTimeToMinutes(payload.end_time);
-
-        const hasOverlap = filteredSameDayEvents.some((existing) => {
-          if (!existing.start_time || !existing.end_time) {
-            return false;
-          }
-
-          const existingStart = this.parseTimeToMinutes(existing.start_time);
-          const existingEnd = this.parseTimeToMinutes(existing.end_time);
-          return start < existingEnd && end > existingStart;
-        });
-
-        if (hasOverlap) {
-          return {
-            data: null,
-            error: toServiceError('DOUBLE_BOOKING_NOT_ALLOWED', 'Event time conflicts with an existing event.'),
-          };
-        }
-      }
-    }
-
-    return { data: true, error: null };
-  }
 
   private async createNotification(params: {
     org_id: string;
@@ -591,30 +485,7 @@ export class EventService {
     return { data: true, error: null };
   }
 
-  private async validatePublishReadiness(event: EventRow): Promise<ServiceResult<true>> {
-    const missing: string[] = [];
 
-    if (!event.title?.trim()) missing.push('Event title');
-    if (!event.type) missing.push('Event type');
-    if (!event.event_date) missing.push('Event date');
-    if (!event.hosting_organization?.trim()) missing.push('Hosting organization');
-    if (!event.coverage_area_boundary_id && !event.coverage_area_municipality) {
-      missing.push('Event Area (City / Municipality)');
-    }
-
-    if (missing.length > 0) {
-      return {
-        data: null,
-        error: toServiceError(
-          'EVENT_SETUP_INCOMPLETE',
-          'Please complete the required fields before publishing.',
-          { missing }
-        ),
-      };
-    }
-
-    return { data: true, error: null };
-  }
 
   private canViewOrgEvent(actor: EventActorContext, event: EventRow): boolean {
     const sameOrg = event.org_id === actor.org_id;
@@ -666,30 +537,7 @@ export class EventService {
     return this.canPublishEvent(actor) || hasPermission(actor, 'events.update');
   }
 
-  private async validateEventWindow(
-    event: Pick<EventRow, 'org_id' | 'event_date' | 'start_time' | 'end_time' | 'id' | 'creation_method'>
-  ): Promise<ServiceResult<true>> {
-    if (!event.start_time || !event.end_time) {
-      return { data: true, error: null };
-    }
 
-    const settingsResult = await this.getOrganizationSettings(event.org_id);
-    if (settingsResult.error) {
-      return { data: null, error: settingsResult.error };
-    }
-
-    return this.validateCreationAgainstSettings(
-      {
-        org_id: event.org_id,
-        event_date: event.event_date,
-        start_time: event.start_time,
-        end_time: event.end_time,
-        exclude_event_id: event.id,
-        creation_method: event.creation_method,
-      },
-      settingsResult.data
-    );
-  }
 
   async getEventById(eventId: string, actor?: EventActorContext): Promise<ServiceResult<EventRow>> {
     const { data, error } = await this.supabase.from('events').select('*').eq('id', eventId).single();
@@ -899,13 +747,13 @@ export class EventService {
 
       eventForValidation.coverage_area_id = await this.autoMatchCoverageArea(parsed.org_id, eventForValidation);
 
-      const windowCheck = await this.validateEventWindow(eventForValidation);
+      const windowCheck = await this.validator.validateEventWindow(eventForValidation);
       if (windowCheck.error) {
         return { data: null, error: windowCheck.error };
       }
 
       if (status === 'scheduled' || status === 'published') {
-        const readiness = await this.validatePublishReadiness(eventForValidation);
+        const readiness = await this.validator.validatePublishReadiness(eventForValidation);
         if (readiness.error) {
           return { data: null, error: readiness.error };
         }
@@ -1126,13 +974,13 @@ export class EventService {
         };
       }
 
-      const windowCheck = await this.validateEventWindow(candidate);
+      const windowCheck = await this.validator.validateEventWindow(candidate);
       if (windowCheck.error) {
         return { data: null, error: windowCheck.error };
       }
 
       if (candidate.status === 'scheduled' || candidate.status === 'published') {
-        const readiness = await this.validatePublishReadiness(candidate);
+        const readiness = await this.validator.validatePublishReadiness(candidate);
         if (readiness.error) {
           return { data: null, error: readiness.error };
         }
@@ -1292,7 +1140,7 @@ export class EventService {
       };
 
       if (parsed.status === 'scheduled' || parsed.status === 'published') {
-        const readiness = await this.validatePublishReadiness(candidate);
+        const readiness = await this.validator.validatePublishReadiness(candidate);
         if (readiness.error) {
           return { data: null, error: readiness.error };
         }
@@ -1437,13 +1285,13 @@ export class EventService {
       candidate.coverage_area_id = await this.autoMatchCoverageArea(actor.org_id, candidate);
       parsed.coverage_area_id = candidate.coverage_area_id;
 
-      const windowCheck = await this.validateEventWindow(candidate);
+      const windowCheck = await this.validator.validateEventWindow(candidate);
       if (windowCheck.error) {
         return { data: null, error: windowCheck.error };
       }
 
       if (candidate.status === 'scheduled' || candidate.status === 'published') {
-        const readiness = await this.validatePublishReadiness(candidate);
+        const readiness = await this.validator.validatePublishReadiness(candidate);
         if (readiness.error) {
           return { data: null, error: readiness.error };
         }
