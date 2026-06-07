@@ -13,6 +13,7 @@ exports.hasPermission = hasPermission;
 exports.hasRole = hasRole;
 exports.getUserFromRequest = getUserFromRequest;
 const supabase_js_1 = require("@supabase/supabase-js");
+const supabase_client_1 = require("../../lib/supabase/supabase.client");
 const auth_types_1 = require("./auth.types");
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
@@ -107,20 +108,21 @@ async function getCurrentUser(accessToken) {
  */
 async function getUserOrganization(orgId) {
     try {
-        const { data: orgData, error: orgError } = await supabase
+        const { data: orgData, error: orgError } = await supabase_client_1.supabaseServer
             .from('organizations')
-            .select('id, name, code, is_active, settings')
+            .select('id, name, code, is_active')
             .eq('id', orgId)
             .maybeSingle();
         if (orgError || !orgData) {
             return null;
         }
+        const _org = orgData;
         return {
-            id: orgData.id,
-            name: orgData.name,
-            code: orgData.code,
-            is_active: orgData.is_active,
-            settings: orgData.settings,
+            id: _org.id,
+            name: _org.name,
+            code: _org.code,
+            is_active: _org.is_active,
+            settings: _org.settings,
         };
     }
     catch (error) {

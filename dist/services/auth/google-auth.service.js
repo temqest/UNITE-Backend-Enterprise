@@ -219,6 +219,7 @@ async function buildSessionForAuthUser(input) {
             organization = {
                 id: orgData.id,
                 name: orgData.name,
+                code: orgData.code,
                 is_active: orgData.is_active,
                 settings: orgData.settings,
             };
