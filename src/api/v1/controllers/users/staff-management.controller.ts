@@ -280,11 +280,20 @@ export async function updateStaffManagementController(req: Request, res: Respons
     const existingQuery = supabaseServer.from('users').select('*').eq('id', targetUserId).maybeSingle();
     const { data: existingUserRaw, error: existingError } = await existingQuery;
     const existingUser = existingUserRaw as UserRowLike | null;
+    
     if (existingError || !existingUser) {
       sendError(res, 404, {
         code: 'USER_NOT_FOUND',
         message: 'Staff user not found.',
         details: existingError,
+      });
+      return;
+    }
+
+    if (existingUser.org_id !== req.user.org_id) {
+      sendError(res, 403, {
+        code: 'UNAUTHORIZED_ACCESS',
+        message: 'You do not have permission to access this resource. It belongs to another organization.',
       });
       return;
     }
@@ -476,16 +485,23 @@ export async function deleteStaffManagementController(req: Request, res: Respons
       .from('users')
       .select('id, auth_id, org_id, role')
       .eq('id', targetUserId)
-      .eq('org_id', req.user.org_id)
       .maybeSingle();
 
-    const targetUser = targetUserRaw as { auth_id?: string; role?: unknown } | null;
+    const targetUser = targetUserRaw as { auth_id?: string; role?: unknown; org_id: string } | null;
 
     if (targetError || !targetUser) {
       sendError(res, 404, {
         code: 'USER_NOT_FOUND',
         message: 'Staff user not found.',
         details: targetError,
+      });
+      return;
+    }
+
+    if (targetUser.org_id !== req.user.org_id) {
+      sendError(res, 403, {
+        code: 'UNAUTHORIZED_ACCESS',
+        message: 'You do not have permission to access this resource. It belongs to another organization.',
       });
       return;
     }

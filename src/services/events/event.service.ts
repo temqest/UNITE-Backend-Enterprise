@@ -568,7 +568,7 @@ export class EventService {
     if (!this.canViewOrgEvent(actor, event)) {
       return {
         data: null,
-        error: toServiceError('PERMISSION_DENIED', 'You do not have permission to view this event.'),
+        error: toServiceError('UNAUTHORIZED_ACCESS', 'You do not have permission to view this event. It belongs to another organization.'),
       };
     }
 
@@ -1444,7 +1444,7 @@ export class EventService {
         .order('start_time', { ascending: true })
         .range(offset, offset + limit - 1);
 
-      query = parsed.org_id ? query.eq('org_id', parsed.org_id) : query.eq('org_id', actor.org_id);
+      query = query.eq('org_id', actor.org_id);
 
       if (parsed.statuses?.length) {
         query = query.in('status', parsed.statuses);
