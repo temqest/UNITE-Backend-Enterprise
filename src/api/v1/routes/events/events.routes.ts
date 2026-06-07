@@ -140,6 +140,22 @@ function toActor(user: AuthenticatedUser): EventActorContext {
   };
 }
 
+const forbidRoles = (roles: string[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    if (req.user?.role?.type && roles.includes(req.user.role.type)) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Access denied for your role.',
+        },
+      });
+      return;
+    }
+    next();
+  };
+};
+
 eventsRouter.post('/quick-create', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), validateMiddleware(passthroughValidator), asyncHandler(quickCreateEventController as any));
 eventsRouter.post('/manual', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), validateMiddleware(passthroughValidator), asyncHandler(createManualEventController as any));
 eventsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), validateMiddleware(passthroughValidator), asyncHandler(createEventController as any));
@@ -182,15 +198,15 @@ eventsRouter.get('/:id/stats', authMiddleware, requireActiveUser, requireOrgScop
 eventsRouter.patch('/:id/results', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(patchEventResultsController as any));
 eventsRouter.patch('/:id/complete-details', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(completeEventDetailsController as any));
 eventsRouter.patch('/:id/status', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(patchEventStatusController as any));
-eventsRouter.patch('/:id/publish', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), asyncHandler(publishEventController as any));
-eventsRouter.patch('/:id/cancel', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(cancelEventController as any));
+eventsRouter.patch('/:id/publish', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), forbidRoles(['stakeholder', 'volunteer']), validateMiddleware(paramsValidator, 'params'), asyncHandler(publishEventController as any));
+eventsRouter.patch('/:id/cancel', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), forbidRoles(['stakeholder', 'volunteer']), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(cancelEventController as any));
 eventsRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(updateEventController as any));
 eventsRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), asyncHandler(deleteEventController as any));
 
 eventsRouter.post('/:id/approve', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.approve'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(deprecatedEventWorkflowController as any));
 eventsRouter.post('/:id/reject', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.approve'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(deprecatedEventWorkflowController as any));
 eventsRouter.post('/:id/reschedule', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(deprecatedEventWorkflowController as any));
-eventsRouter.post('/:id/cancel', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(cancelEventController as any));
+eventsRouter.post('/:id/cancel', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), forbidRoles(['stakeholder', 'volunteer']), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(cancelEventController as any));
 eventsRouter.post('/:id/staff', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(assignStaffController as any));
 eventsRouter.post('/:id/apply', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(applyAsParticipantController as any));
 eventsRouter.patch('/:id/participants/status', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), validateMiddleware(paramsValidator, 'params'), validateMiddleware(passthroughValidator), asyncHandler(bulkUpdateParticipantStatusController as any));

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import {
   createPlottingCalendarController,
   deletePlottingCalendarController,
@@ -16,6 +16,39 @@ import { authorize, requireActiveUser, requireOrgScope } from '../../../../midde
 import { asyncHandler } from '../../../../lib/async-handler';
 import { plottingCalendarsShareRouter } from './plotting-calendars-share.routes';
 
+interface UserRole {
+  type?: string;
+  permissions?: string[];
+}
+
+interface AuthenticatedUser {
+  id: string;
+  org_id?: string;
+  role?: UserRole;
+  geographic_area?: Record<string, unknown> | null;
+  is_active?: boolean;
+}
+
+type AuthenticatedRequest = Request & {
+  user?: AuthenticatedUser;
+};
+
+const forbidRoles = (roles: string[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    if (req.user?.role?.type && roles.includes(req.user.role.type)) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Access denied for your role.',
+        },
+      });
+      return;
+    }
+    next();
+  };
+};
+
 const plottingCalendarsRouter = Router();
 
 // Mount public share routes
@@ -23,7 +56,7 @@ plottingCalendarsRouter.use('/share', plottingCalendarsShareRouter);
 
 plottingCalendarsRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(listPlottingCalendarsController as any));
 plottingCalendarsRouter.get('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.read'), asyncHandler(getPlottingCalendarController as any));
-plottingCalendarsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), asyncHandler(createPlottingCalendarController as any));
+plottingCalendarsRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.create'), forbidRoles(['stakeholder', 'volunteer']), asyncHandler(createPlottingCalendarController as any));
 plottingCalendarsRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), asyncHandler(updatePlottingCalendarController as any));
 plottingCalendarsRouter.post('/:id/regenerate-access-code', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.update'), asyncHandler(regeneratePlottingCalendarAccessCodeController as any));
 plottingCalendarsRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('events.delete'), asyncHandler(deletePlottingCalendarController as any));

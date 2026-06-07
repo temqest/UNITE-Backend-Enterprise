@@ -189,3 +189,60 @@ export function authorize(permission: string) {
     next();
   };
 }
+
+export function authorizeOrSelf(permission: string, idParamKey: string = 'id') {
+  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user?.id) {
+      logDecision(req, {
+        userId: 'anonymous',
+        role: 'unknown',
+        orgId: 'none',
+        decision: 'deny',
+        reasonCode: 'UNAUTHORIZED',
+      });
+      sendError(res, 401, 'UNAUTHORIZED', 'Authenticated user required.');
+      return;
+    }
+
+    // Bypass permission if the target resource matches the authenticated user ID
+    if (req.params[idParamKey] && req.params[idParamKey] === req.user.id) {
+      logDecision(req, {
+        userId: req.user.id,
+        role: req.user.role?.type ?? 'unknown',
+        orgId: req.user.org_id ?? 'none',
+        decision: 'allow',
+        reasonCode: 'AUTHORIZED_SELF',
+      });
+      next();
+      return;
+    }
+
+    // Proceed with normal authorization
+    const user = req.user as Required<Pick<RequestUser, 'id'>> & RequestUser;
+    const authzService = require('../services/auth/authorization.service');
+    const granted = await authzService.hasPermission(user, permission);
+    if (!granted) {
+      const authz = await authzService.resolveUserAuthorization(user);
+      logDecision(req, {
+        userId: user.id,
+        role: authz.role,
+        orgId: user.org_id ?? 'none',
+        decision: 'deny',
+        reasonCode: 'FORBIDDEN_PERMISSION_REQUIRED',
+      });
+      sendError(res, 403, 'FORBIDDEN', `Permission required: ${permission}`);
+      return;
+    }
+
+    const authz = await authzService.resolveUserAuthorization(user);
+    logDecision(req, {
+      userId: user.id,
+      role: authz.role,
+      orgId: user.org_id ?? 'none',
+      decision: 'allow',
+      reasonCode: 'AUTHORIZED',
+    });
+
+    next();
+  };
+}

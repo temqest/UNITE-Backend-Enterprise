@@ -25,7 +25,7 @@ import {
   validateUserIdParam,
 } from '../../validators/users';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
-import { authorize, requireActiveUser, requireOrgScope } from '../../../../middelware/authorization.middleware';
+import { authorize, authorizeOrSelf, requireActiveUser, requireOrgScope } from '../../../../middelware/authorization.middleware';
 import { validateMiddleware } from '../../../../middelware/validate.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
 
@@ -102,8 +102,8 @@ usersRouter.post('/approve-staff', authMiddleware, requireActiveUser, requireOrg
 usersRouter.patch('/settings', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
 usersRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('staff.read'), validateMiddleware(toValidator(validateStaffListQuery), 'query'), asyncHandler(listStaffController as any));
 usersRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffCreate)), asyncHandler(createStaffManagementController as any));
-usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorize('staff.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
-usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
+usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorizeOrSelf('staff.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
+usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorizeOrSelf('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
 usersRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(deleteStaffManagementController as any));
 
 usersRouter.post('/:id/profile-picture', profilePictureRateLimiter, authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateUserIdParam), 'params'), upload.single('profile_picture'), asyncHandler(uploadProfilePictureController as any));
