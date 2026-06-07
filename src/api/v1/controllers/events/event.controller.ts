@@ -163,7 +163,7 @@ export async function quickCreateEventController(req: Request, res: Response): P
     const actor = toActor(user);
     const result = await eventService.quickCreateEvent(actor, {
       ...(req.body ?? {}),
-      org_id: typeof req.body?.org_id === 'string' ? req.body.org_id : user.org_id,
+      org_id: user.org_id,
     });
 
     if (result.error || !result.data) {
@@ -211,7 +211,7 @@ export async function createEventController(req: Request, res: Response): Promis
     const actor = toActor(user);
     const payload: EventCreateInput = {
       ...validated.data,
-      org_id: validated.data.org_id ?? user.org_id!,
+      org_id: user.org_id!,
       creation_method: 'manual',
       extra_data: validated.data.extra_data ?? {},
     };
@@ -250,7 +250,7 @@ export async function getEventsController(req: Request, res: Response): Promise<
     const typeQuery = query.types ?? query.type;
 
     const filter: EventFilter = {
-      org_id: typeof query.org_id === 'string' && query.org_id.trim().length > 0 ? query.org_id : user.org_id,
+      org_id: user.org_id,
       statuses: parseStringArray(statusQuery) as EventStatus[] | undefined,
       setup_statuses: parseStringArray(query.setup_status ?? query.setup_statuses) as EventFilter['setup_statuses'],
       creation_methods: parseStringArray(query.creation_method ?? query.creation_methods) as EventFilter['creation_methods'],
@@ -364,7 +364,6 @@ export async function patchEventStatusController(req: Request, res: Response): P
     });
   }
 }
-
 export async function publishEventController(req: Request, res: Response): Promise<void> {
   try {
     const user = requireAuthedOrgUser(req, res);
