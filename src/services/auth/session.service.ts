@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { supabaseServer } from '../../lib/supabase/supabase.client';
 import {
   SessionUser,
   OrganizationInfo,
@@ -136,9 +137,9 @@ export async function getCurrentUser(accessToken?: string): Promise<SessionUser 
  */
 export async function getUserOrganization(orgId: string): Promise<OrganizationInfo | null> {
   try {
-    const { data: orgData, error: orgError } = await supabase
+    const { data: orgData, error: orgError } = await supabaseServer
       .from('organizations')
-      .select('id, name, code, is_active, settings')
+      .select('id, name, code, is_active')
       .eq('id', orgId)
       .maybeSingle();
 
@@ -146,12 +147,13 @@ export async function getUserOrganization(orgId: string): Promise<OrganizationIn
       return null;
     }
 
+    const _org = orgData as any;
     return {
-      id: orgData.id,
-      name: orgData.name,
-      code: orgData.code,
-      is_active: orgData.is_active,
-      settings: orgData.settings,
+      id: _org.id,
+      name: _org.name,
+      code: _org.code,
+      is_active: _org.is_active,
+      settings: _org.settings,
     };
   } catch (error) {
     return null;

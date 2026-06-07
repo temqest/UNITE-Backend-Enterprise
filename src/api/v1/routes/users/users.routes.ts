@@ -96,13 +96,13 @@ usersRouter.post('/signup', validateMiddleware(toValidator(validateSignup)), asy
   }
 });
 
-usersRouter.get('/profile', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.read'), validateMiddleware(toValidator(validateGetProfile)), asyncHandler(getProfileController as any));
-usersRouter.patch('/profile', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.read'), validateMiddleware(toValidator(validateProfileUpdate)), asyncHandler(updateProfileController as any));
+usersRouter.get('/profile', authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateGetProfile)), asyncHandler(getProfileController as any));
+usersRouter.patch('/profile', authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(toValidator(validateProfileUpdate)), asyncHandler(updateProfileController as any));
 usersRouter.post('/approve-staff', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.approve'), validateMiddleware(toValidator(validateStaffApproval)), asyncHandler(approveStaffController as any));
 usersRouter.patch('/settings', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
-usersRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffListQuery), 'query'), asyncHandler(listStaffController as any));
+usersRouter.get('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('staff.read'), validateMiddleware(toValidator(validateStaffListQuery), 'query'), asyncHandler(listStaffController as any));
 usersRouter.post('/', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateStaffCreate)), asyncHandler(createStaffManagementController as any));
-usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
+usersRouter.get('/:id/detail', authMiddleware, requireActiveUser, requireOrgScope, authorize('staff.read'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(getStaffDetailController as any));
 usersRouter.patch('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), validateMiddleware(toValidator(validateStaffUpdate)), asyncHandler(updateStaffManagementController as any));
 usersRouter.delete('/:id', authMiddleware, requireActiveUser, requireOrgScope, authorize('users.invite'), validateMiddleware(toValidator(validateUserIdParam), 'params'), asyncHandler(deleteStaffManagementController as any));
 

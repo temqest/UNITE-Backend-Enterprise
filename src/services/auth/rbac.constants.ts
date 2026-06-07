@@ -61,6 +61,7 @@ const LEGACY_PERMISSION_MAP: Record<string, string> = {
   manage_staff: 'users.invite',
   manage_users: 'users.invite',
   manage_org_settings: 'settings.update',
+  'staff.read': 'users.read',
   manage_events: 'events.update',
   edit_events: 'events.update',
   view_events: 'events.read',
