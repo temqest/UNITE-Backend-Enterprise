@@ -1,0 +1,10 @@
+export const EVENT_TYPES = ['blood_drive', 'training', 'advocacy', 'assembly'] as const;
+export const PLOTTING_CALENDAR_STATUSES = ['active', 'closed', 'expired', 'archived'] as const;
+export const ACCESS_TYPES = ['org', 'users', 'organizations', 'share_token', 'organization_link'] as const;
+export const DAY_STATUSES = ['open', 'unavailable', 'fully_booked'] as const;
+export const SLOT_STATUSES = ['open', 'unavailable', 'fully_booked'] as const;
+export const EVENT_STATUSES = ['draft', 'plotted', 'needs_details', 'scheduled', 'published', 'ongoing', 'completed', 'cancelled'] as const;
+export const EVENT_SETUP_STATUSES = ['needs_details', 'pending_setup', 'complete'] as const;
+export const EVENT_CREATION_METHODS = ['manual', 'plotting_calendar'] as const;
+export const EVENT_VISIBILITIES = ['internal', 'public'] as const;
+export const AVAILABILITY_MODES = ['flexible', 'slots'] as const;

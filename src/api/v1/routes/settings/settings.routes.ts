@@ -4,6 +4,7 @@ import {
   getUserSettingsController,
   updateOrganizationSettingsController,
   updateUserSettingsController,
+  verifyFeaturePinController,
 } from '../../controllers/users/settings.controller';
 import { validateSettingsUpdate } from '../../validators/users';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
@@ -48,6 +49,7 @@ const settingsRouter = Router();
 
 settingsRouter.get('/organization', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.read'), validateMiddleware(passthroughValidator), asyncHandler(getOrganizationSettingsController as any));
 settingsRouter.patch('/organization', authMiddleware, requireActiveUser, requireOrgScope, authorize('settings.update'), validateMiddleware(passthroughValidator), asyncHandler(updateOrganizationSettingsController as any));
+settingsRouter.post('/organization/verify-pin', authMiddleware, requireActiveUser, requireOrgScope, validateMiddleware(passthroughValidator), asyncHandler(verifyFeaturePinController as any));
 settingsRouter.get('/user', authMiddleware, requireActiveUser, validateMiddleware(passthroughValidator), asyncHandler(getUserSettingsController as any));
 settingsRouter.patch('/user', authMiddleware, requireActiveUser, validateMiddleware(toValidator(validateSettingsUpdate)), asyncHandler(updateUserSettingsController as any));
 
