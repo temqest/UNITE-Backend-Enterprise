@@ -453,8 +453,8 @@ export class UserService {
   private async createPendingSignup(input: {
     auth_user_id: string;
     email: string;
-    signup_type: 'admin' | 'staff';
-    role: 'super_admin' | 'staff';
+    signup_type: 'admin' | 'staff' | 'donor';
+    role: 'super_admin' | 'staff' | 'donor';
     org_id?: string;
     organization_payload?: Record<string, unknown>;
     profile_payload: Record<string, unknown>;
@@ -805,6 +805,93 @@ export class UserService {
         data: null,
         error: toServiceError('STAFF_SIGNUP_VALIDATION_ERROR', 'Invalid staff signup payload.', error),
       };
+    }
+  }
+
+  async donorSelfSignup(
+    input: {
+      email: string;
+      password: string;
+      first_name: string;
+      last_name: string;
+      geographic_area?: GeographicArea | null;
+    }
+  ): Promise<ServiceResult<{ auth_user_id: string; pending_verification: boolean }>> {
+    try {
+      const parsed = z.object({
+        email: z.string().email(),
+        password: z.string().min(8).max(128),
+        first_name: z.string().trim().min(1),
+        last_name: z.string().trim().min(1),
+        geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
+      }).parse(input);
+
+      const authResult = await this.createSignupAuthUser({
+        email: parsed.email,
+        password: parsed.password,
+        user_metadata: {
+          role: 'donor',
+          signup_source: 'donor_signup',
+          first_name: parsed.first_name,
+          last_name: parsed.last_name,
+          geographic_area: parsed.geographic_area ?? null,
+        },
+      });
+
+      if (authResult.error || !authResult.data) {
+        return {
+          data: null,
+          error: authResult.error ?? toServiceError('AUTH_SIGNUP_FAILED', 'Failed to create donor auth account.'),
+        };
+      }
+
+      const existingProfile = await this.getUserByAuthIdOptional(authResult.data.id);
+      if (existingProfile.error) return { data: null, error: existingProfile.error };
+      if (existingProfile.data) {
+        return { data: null, error: toServiceError('ACCOUNT_ALREADY_EXISTS', 'Account exists.') };
+      }
+
+      const pendingSignupResult = await this.createPendingSignup({
+        auth_user_id: authResult.data.id,
+        email: parsed.email,
+        signup_type: 'donor',
+        role: 'donor',
+        profile_payload: {
+          first_name: parsed.first_name,
+          last_name: parsed.last_name,
+          geographic_area: parsed.geographic_area ?? null,
+          is_active: true, // Donors don't need manual approval like staff
+          role: { type: 'donor', permissions: [] }
+        },
+      });
+
+      if (pendingSignupResult.error) {
+        await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+        return { data: null, error: pendingSignupResult.error };
+      }
+
+      try {
+        const verifyResult = await sendVerificationCode({
+          email: parsed.email,
+          authUserId: authResult.data.id,
+          firstName: parsed.first_name,
+        });
+
+        if (!verifyResult.success) {
+          await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+          return { data: null, error: toServiceError('VERIFICATION_EMAIL_FAILED', 'Failed.') };
+        }
+      } catch (emailError) {
+        await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+        return { data: null, error: toServiceError('VERIFICATION_EMAIL_FAILED', 'Failed to send email.') };
+      }
+
+      return {
+        data: { auth_user_id: authResult.data.id, pending_verification: true },
+        error: null,
+      };
+    } catch (error) {
+      return { data: null, error: toServiceError('DONOR_SIGNUP_VALIDATION_ERROR', 'Invalid payload', error) };
     }
   }
 

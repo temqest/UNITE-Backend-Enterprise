@@ -160,10 +160,11 @@ export async function assignStaffController(req: Request, res: Response): Promis
 
 export async function applyAsParticipantController(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user?.id || req.user.is_active === false || !req.user.org_id) {
+    const isDonor = req.user?.role?.type === 'donor';
+    if (!req.user?.id || req.user.is_active === false || (!isDonor && !req.user.org_id)) {
       sendError(res, 401, {
         code: 'UNAUTHORIZED',
-        message: 'Active authenticated organization user required.',
+        message: 'Active authenticated organization user or donor required.',
       });
       return;
     }

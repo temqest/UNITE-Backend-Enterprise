@@ -180,6 +180,59 @@ export async function signupStaffController(req: Request, res: Response): Promis
   }
 }
 
+export async function signupDonorController(req: Request, res: Response): Promise<void> {
+  try {
+    const body = req.body ?? {};
+    const baseValidation = validateSignup(body);
+    if (!baseValidation.success) {
+      sendError(res, 400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid donor signup payload.',
+        details: baseValidation.error,
+      });
+      return;
+    }
+
+    const signupData = baseValidation.data;
+    if (!signupData) {
+      sendError(res, 400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid donor signup payload.',
+      });
+      return;
+    }
+
+    const result = await userService.donorSelfSignup({
+      email: signupData.email,
+      password: signupData.password,
+      first_name: signupData.firstName,
+      last_name: signupData.lastName,
+      geographic_area:
+        body.geographic_area && typeof body.geographic_area === 'object'
+          ? (body.geographic_area as Record<string, unknown>)
+          : undefined,
+    });
+
+    if (result.error || !result.data) {
+      sendError(res, 400, {
+        code: result.error?.code ?? 'DONOR_SIGNUP_FAILED',
+        message: result.error?.message ?? 'Failed to create donor account.',
+        details: result.error?.details,
+      });
+      return;
+    }
+
+    res.status(201).json({ success: true, data: result.data });
+  } catch (error) {
+    const err = error as Partial<ApiError>;
+    sendError(res, 500, {
+      code: err.code ?? 'DONOR_SIGNUP_ERROR',
+      message: err.message ?? 'Unexpected error during donor signup.',
+      details: err.details,
+    });
+  }
+}
+
 export async function createStaffController(req: Request, res: Response): Promise<void> {
   try {
     if (!req.user?.id || req.user.is_active === false) {

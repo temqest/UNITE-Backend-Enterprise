@@ -12,7 +12,7 @@ import {
 } from '../../controllers/users/staff-management.controller';
 import { getStaffDetailController } from '../../controllers/users/staff-detail.controller';
 import { uploadProfilePictureController, deleteProfilePictureController } from '../../controllers/users/profile-picture.controller';
-import { signupAdminController, signupStaffController } from '../../controllers/users/signup.controller';
+import { signupAdminController, signupStaffController, signupDonorController } from '../../controllers/users/signup.controller';
 import {
   validateGetProfile,
   validateProfileUpdate,
@@ -87,6 +87,11 @@ usersRouter.post('/signup', validateMiddleware(toValidator(validateSignup)), asy
 
     if (role === 'admin' || hasOrganization) {
       await signupAdminController(req, res);
+      return;
+    }
+
+    if (role === 'donor') {
+      await signupDonorController(req, res);
       return;
     }
 
