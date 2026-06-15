@@ -145,19 +145,60 @@ export class EventParticipantsService {
         }
       }
 
-      const { data, error } = await this.supabase
+      const participantUserId = parsed.participant_type === 'user' ? parsed.participant_user_id ?? actor.id : null;
+      const participantDonorId = parsed.participant_type === 'donor' ? parsed.participant_donor_id ?? null : null;
+
+      let checkQuery = this.supabase
         .from('event_participants')
-        .upsert({
-          org_id: event.org_id,
-          event_id: event.id,
-          participant_type: parsed.participant_type,
-          participant_user_id: parsed.participant_type === 'user' ? parsed.participant_user_id ?? actor.id : null,
-          participant_donor_id: parsed.participant_type === 'donor' ? parsed.participant_donor_id ?? null : null,
-          status: 'applied',
-          notes: parsed.notes ?? null,
-        }, { onConflict: 'event_id,participant_type,coalesce(participant_user_id, participant_donor_id)' })
         .select('*')
-        .single();
+        .eq('event_id', event.id)
+        .eq('participant_type', parsed.participant_type);
+        
+      if (participantUserId) {
+        checkQuery = checkQuery.eq('participant_user_id', participantUserId);
+      } else {
+        checkQuery = checkQuery.is('participant_user_id', null);
+      }
+      
+      if (participantDonorId) {
+        checkQuery = checkQuery.eq('participant_donor_id', participantDonorId);
+      } else {
+        checkQuery = checkQuery.is('participant_donor_id', null);
+      }
+
+      const { data: existingData } = await checkQuery.maybeSingle();
+
+      let data, error;
+
+      if (existingData) {
+        const res = await this.supabase
+          .from('event_participants')
+          .update({
+            status: 'applied',
+            notes: parsed.notes ?? null,
+          })
+          .eq('id', existingData.id)
+          .select('*')
+          .single();
+        data = res.data;
+        error = res.error;
+      } else {
+        const res = await this.supabase
+          .from('event_participants')
+          .insert({
+            org_id: event.org_id,
+            event_id: event.id,
+            participant_type: parsed.participant_type,
+            participant_user_id: participantUserId,
+            participant_donor_id: participantDonorId,
+            status: 'applied',
+            notes: parsed.notes ?? null,
+          })
+          .select('*')
+          .single();
+        data = res.data;
+        error = res.error;
+      }
 
       if (error || !data) {
         return {

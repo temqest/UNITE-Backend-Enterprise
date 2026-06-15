@@ -90,7 +90,7 @@ const AdminSignupSchema = z.object({
   }),
   admin: z.object({
     email: z.string().email(),
-    password: z.string().min(8).max(128),
+    password: z.string().min(6).max(128),
     first_name: z.string().trim().min(1),
     last_name: z.string().trim().min(1),
     geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -105,7 +105,7 @@ const StaffSelfSignupSchema = z.object({
     .max(32)
     .regex(/^[A-Z0-9_-]+$/),
   email: z.string().email(),
-  password: z.string().min(8).max(128),
+  password: z.string().min(6).max(128),
   first_name: z.string().trim().min(1),
   last_name: z.string().trim().min(1),
   geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -483,6 +483,7 @@ export class UserService {
       .single();
 
     if (error || !data) {
+      console.error('PENDING SIGNUP ERROR:', error);
       return {
         data: null,
         error: toServiceError(
@@ -820,7 +821,7 @@ export class UserService {
     try {
       const parsed = z.object({
         email: z.string().email(),
-        password: z.string().min(8).max(128),
+        password: z.string().min(6).max(128),
         first_name: z.string().trim().min(1),
         last_name: z.string().trim().min(1),
         geographic_area: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -851,11 +852,24 @@ export class UserService {
         return { data: null, error: toServiceError('ACCOUNT_ALREADY_EXISTS', 'Account exists.') };
       }
 
+      const { data: defaultOrgs, error: defaultOrgError } = await this.supabase
+        .from('organizations')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1);
+
+      const defaultOrgId = defaultOrgs?.[0]?.id;
+
+      if (!defaultOrgId) {
+        return { data: null, error: toServiceError('ORG_MISSING', 'System error: No active organization available for donor assignment.') };
+      }
+
       const pendingSignupResult = await this.createPendingSignup({
         auth_user_id: authResult.data.id,
         email: parsed.email,
         signup_type: 'donor',
         role: 'donor',
+        org_id: defaultOrgId,
         profile_payload: {
           first_name: parsed.first_name,
           last_name: parsed.last_name,

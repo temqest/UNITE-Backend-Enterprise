@@ -115,11 +115,16 @@ export class EventOperationsService {
   private async getActorEventMembership(actor: EventActorContext): Promise<ServiceResult<Set<string>>> {
     const eventIds = new Set<string>();
 
-    const { data: staffRows, error: staffError } = await this.supabase
+    let staffQuery = this.supabase
       .from('event_staff')
       .select('event_id')
-      .eq('org_id', actor.org_id)
       .eq('user_id', actor.id);
+
+    if (actor.role.type !== 'donor') {
+      staffQuery = staffQuery.eq('org_id', actor.org_id);
+    }
+
+    const { data: staffRows, error: staffError } = await staffQuery;
 
     if (staffError) {
       return {
@@ -134,12 +139,17 @@ export class EventOperationsService {
       }
     }
 
-    const { data: participantRows, error: participantError } = await this.supabase
+    let participantQuery = this.supabase
       .from('event_participants')
       .select('event_id')
-      .eq('org_id', actor.org_id)
       .eq('participant_type', 'user')
       .eq('participant_user_id', actor.id);
+
+    if (actor.role.type !== 'donor') {
+      participantQuery = participantQuery.eq('org_id', actor.org_id);
+    }
+
+    const { data: participantRows, error: participantError } = await participantQuery;
 
     if (participantError) {
       return {
@@ -246,9 +256,12 @@ export class EventOperationsService {
       let query = this.supabase
         .from('events')
         .select('*')
-        .eq('org_id', actor.org_id)
         .order('event_date', { ascending: false })
         .order('start_time', { ascending: false });
+
+      if (actor.role.type !== 'donor') {
+        query = query.eq('org_id', actor.org_id);
+      }
 
       if (parsed.statuses && parsed.statuses.length > 0) {
         query = query.in('status', parsed.statuses);

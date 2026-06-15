@@ -8,19 +8,7 @@ export const signupSchema = z.object({
     .trim(),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters long')
-    .refine(
-      (password) => /[a-z]/.test(password),
-      'Password must contain at least one lowercase letter'
-    )
-    .refine(
-      (password) => /[A-Z]/.test(password),
-      'Password must contain at least one uppercase letter'
-    )
-    .refine(
-      (password) => /\d/.test(password),
-      'Password must contain at least one number'
-    ),
+    .min(6, 'Password must be at least 6 characters long'),
   firstName: z
     .string()
     .min(1, 'First name is required')
@@ -36,7 +24,7 @@ export const signupSchema = z.object({
     .uuid('Organization ID must be a valid UUID')
     .optional(),
   role: z
-    .enum(['admin', 'staff'])
+    .enum(['admin', 'staff', 'donor'])
     .optional()
     .default('staff'),
 }).passthrough();
