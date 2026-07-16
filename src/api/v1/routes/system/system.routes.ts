@@ -40,3 +40,30 @@ systemRouter.get('/health', async (req, res) => {
     });
   }
 });
+
+systemRouter.get('/keep-alive', async (req, res) => {
+  try {
+    // Perform a lightweight query to keep the database active
+    const { data, error } = await supabase.from('users').select('id').limit(1);
+    
+    if (error) {
+      throw error;
+    }
+
+    systemLogger.info('Keep-alive cron triggered successfully');
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Database keep-alive ping successful',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    systemLogger.error({ err: error }, 'Keep-alive ping failed');
+    res.status(500).json({
+      status: 'error',
+      message: 'Database keep-alive ping failed',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
