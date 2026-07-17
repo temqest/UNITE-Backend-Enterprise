@@ -14,6 +14,7 @@ import { analyticsRoutes } from './analytics/analytics.routes';
 import { activityLogsRouter } from './activity-logs';
 import { systemRouter } from './system/system.routes';
 import { waitlistRouter } from './waitlist';
+import chatbotRoutes from './ai/chatbot.routes';
 
 const v1Router = Router();
 
@@ -32,6 +33,7 @@ v1Router.use('/analytics', analyticsRoutes);
 v1Router.use('/activity-logs', activityLogsRouter);
 v1Router.use('/system', systemRouter);
 v1Router.use('/waitlist', waitlistRouter);
+v1Router.use('/chatbot', chatbotRoutes);
 
 export { v1Router };
 export default v1Router;
