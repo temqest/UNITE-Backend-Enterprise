@@ -21,7 +21,7 @@ export class ChatbotController {
 
   static async handleCompanionChat(req: any, res: Response) {
     try {
-      const { message } = req.body;
+      const { message, history = [] } = req.body;
       
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
@@ -32,9 +32,9 @@ export class ChatbotController {
          return res.status(401).json({ error: "User context missing." });
       }
 
-      const reply = await AIService.chatWithCompanion(message, actor);
+      const { text: reply, ui } = await AIService.chatWithCompanion(message, actor, history);
 
-      return res.status(200).json({ reply });
+      return res.status(200).json({ reply, ui });
     } catch (error) {
       console.error("Error in Companion ChatbotController:", error);
       return res.status(500).json({ error: "An error occurred while communicating with the AI Companion." });
