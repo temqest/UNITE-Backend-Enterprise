@@ -128,7 +128,15 @@ export class InventoryService {
       await inventoryTable.insert(missingRows);
     }
 
-    baselineRowsEnsuredAtByOrg.set(orgId, Date.now());
+    const now = Date.now();
+    if (baselineRowsEnsuredAtByOrg.size > 100) {
+      for (const [k, timestamp] of baselineRowsEnsuredAtByOrg.entries()) {
+        if (now - timestamp > BASELINE_ROWS_TTL_MS) {
+          baselineRowsEnsuredAtByOrg.delete(k);
+        }
+      }
+    }
+    baselineRowsEnsuredAtByOrg.set(orgId, now);
   }
 
   private toCard(bloodType: BloodType, rows: BloodInventoryRow[]): BloodTypeInventoryCard {

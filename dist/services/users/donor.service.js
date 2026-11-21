@@ -183,43 +183,31 @@ class DonorService {
     async resolveDonorOrganization(orgCode) {
         const organizationsTable = this.supabase.from('organizations');
         const preferredCode = orgCode || process.env.DEFAULT_DONOR_ORG_CODE || '';
-        if (preferredCode.trim().length > 0) {
-            const normalized = normalizeCode(preferredCode);
-            const { data, error } = await organizationsTable
-                .select('id, code, is_active')
-                .ilike('code', normalized)
-                .maybeSingle();
-            if (error) {
-                return {
-                    data: null,
-                    error: toServiceError('ORG_LOOKUP_FAILED', 'Failed to resolve donor organization.', error),
-                };
-            }
-            if (!data || data.is_active !== true) {
-                return {
-                    data: null,
-                    error: toServiceError('ORG_NOT_FOUND', 'No active organization found for the provided org code.'),
-                };
-            }
-            return {
-                data: { id: String(data.id), code: String(data.code) },
-                error: null,
-            };
-        }
-        const { data: firstOrg, error: firstOrgError } = await organizationsTable
-            .select('id, code')
-            .eq('is_active', true)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-        if (firstOrgError || !firstOrg?.id) {
+        if (preferredCode.trim().length === 0) {
             return {
                 data: null,
-                error: toServiceError('ORG_NOT_FOUND', 'No active organization is available for donor signup.', firstOrgError),
+                error: toServiceError('ORG_CODE_REQUIRED', 'An organization code (org_code) is required for donor signup.'),
+            };
+        }
+        const normalized = normalizeCode(preferredCode);
+        const { data, error } = await organizationsTable
+            .select('id, code, is_active')
+            .ilike('code', normalized)
+            .maybeSingle();
+        if (error) {
+            return {
+                data: null,
+                error: toServiceError('ORG_LOOKUP_FAILED', 'Failed to resolve donor organization.', error),
+            };
+        }
+        if (!data || data.is_active !== true) {
+            return {
+                data: null,
+                error: toServiceError('ORG_NOT_FOUND', 'No active organization found for the provided org code.'),
             };
         }
         return {
-            data: { id: String(firstOrg.id), code: String(firstOrg.code) },
+            data: { id: String(data.id), code: String(data.code) },
             error: null,
         };
     }

@@ -64,6 +64,14 @@ export async function uploadProfilePictureController(req: CustomRequest, res: Re
       return;
     }
 
+    if (targetUser.org_id !== req.user.org_id) {
+      sendError(res, 403, {
+        code: 'UNAUTHORIZED_ACCESS',
+        message: 'You do not have permission to access this resource. It belongs to another organization.',
+      });
+      return;
+    }
+
     const actorRole = req.user.role?.type ?? '';
     const targetRoleObj = typeof targetUser.role === 'string' ? targetUser.role : targetUser.role?.type;
     const targetRole = String(targetRoleObj ?? '');
@@ -163,6 +171,14 @@ export async function deleteProfilePictureController(req: CustomRequest, res: Re
 
     if (targetError || !targetUser) {
       sendError(res, 404, { code: 'USER_NOT_FOUND', message: 'User not found.' });
+      return;
+    }
+
+    if (targetUser.org_id !== req.user.org_id) {
+      sendError(res, 403, {
+        code: 'UNAUTHORIZED_ACCESS',
+        message: 'You do not have permission to access this resource. It belongs to another organization.',
+      });
       return;
     }
 

@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateChangePassword = exports.changePasswordSchema = void 0;
 const z = __importStar(require("zod"));
 exports.changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, { message: 'Current password is required' }).optional(),
     newPassword: z
         .string()
         .min(8, { message: 'Password must be at least 8 characters' })

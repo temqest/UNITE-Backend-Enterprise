@@ -26,6 +26,7 @@ import {
 } from '../../validators/users';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
 import { authorize, authorizeOrSelf, requireActiveUser, requireOrgScope } from '../../../../middelware/authorization.middleware';
+import { authSignupRateLimiter } from '../../../../middelware/rate-limit.middleware';
 import { validateMiddleware } from '../../../../middelware/validate.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
 
@@ -80,7 +81,7 @@ const profilePictureRateLimiter = rateLimit({
   },
 });
 
-usersRouter.post('/signup', validateMiddleware(toValidator(validateSignup)), async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.post('/signup', authSignupRateLimiter, validateMiddleware(toValidator(validateSignup)), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const role = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
     const hasOrganization = Boolean(req.body?.organization);

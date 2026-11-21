@@ -140,15 +140,30 @@ async function verifySignupOtp(input) {
                 success: false,
                 message: 'Too many failed attempts. Please sign up again.',
                 isVerified: false,
+                remainingAttempts: 0,
             };
         }
         if (codeRecord.code !== code) {
-            await cleanupFailedPendingSignup(authUserId, normalizedEmail);
+            const updatedAttempts = (codeRecord.attempts || 0) + 1;
+            await supabaseService
+                .from('email_verification_codes')
+                .update({ attempts: updatedAttempts })
+                .eq('id', codeRecord.id);
+            if (updatedAttempts >= codeRecord.max_attempts) {
+                await cleanupFailedPendingSignup(authUserId, normalizedEmail);
+                return {
+                    success: false,
+                    message: 'Too many failed attempts. Please sign up again.',
+                    isVerified: false,
+                    remainingAttempts: 0,
+                };
+            }
+            const remainingAttempts = Math.max(0, codeRecord.max_attempts - updatedAttempts);
             return {
                 success: false,
-                message: 'Incorrect verification code. Please sign up again.',
+                message: `Incorrect verification code. You have ${remainingAttempts} attempt(s) remaining.`,
                 isVerified: false,
-                remainingAttempts: 0,
+                remainingAttempts,
             };
         }
         const finalizeResult = await finalizePendingSignup(authUserId, normalizedEmail, codeRecord.id);

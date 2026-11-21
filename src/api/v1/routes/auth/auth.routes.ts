@@ -10,7 +10,7 @@ import { changePasswordController, forgotPasswordController } from '../../contro
 import { validateChangePassword, validateForgotPassword, validateLogin, validateResendOtp, validateVerifyOtp } from '../../validators/auth';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
 import { requireActiveUser } from '../../../../middelware/authorization.middleware';
-import { authLoginRateLimiter, authOtpRateLimiter } from '../../../../middelware/rate-limit.middleware';
+import { authLoginRateLimiter, authOtpRateLimiter, authForgotPasswordRateLimiter } from '../../../../middelware/rate-limit.middleware';
 import { validateMiddleware } from '../../../../middelware/validate.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
 
@@ -51,7 +51,7 @@ authRouter.post('/google/exchange', authLoginRateLimiter, asyncHandler(exchangeG
 authRouter.post('/google/complete-signup', authLoginRateLimiter, asyncHandler(completeGoogleSignupController as any));
 authRouter.post('/verify-otp', authOtpRateLimiter, validateMiddleware(toValidator(validateVerifyOtp)), asyncHandler(verifyOtpController as any));
 authRouter.post('/resend-otp', authOtpRateLimiter, validateMiddleware(toValidator(validateResendOtp)), asyncHandler(resendOtpController as any));
-authRouter.post('/forgot-password', validateMiddleware(toValidator(validateForgotPassword)), asyncHandler(forgotPasswordController as any));
+authRouter.post('/forgot-password', authForgotPasswordRateLimiter, validateMiddleware(toValidator(validateForgotPassword)), asyncHandler(forgotPasswordController as any));
 authRouter.get('/me', authMiddleware, requireActiveUser, asyncHandler(meController as any));
 authRouter.post('/logout', asyncHandler(logoutController as any));
 authRouter.post('/change-password', authMiddleware, requireActiveUser, validateMiddleware(toValidator(validateChangePassword)), asyncHandler(changePasswordController as any));

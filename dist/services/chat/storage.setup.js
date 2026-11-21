@@ -30,36 +30,68 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('chat-files', 'chat-files', false)
 -- ON CONFLICT DO NOTHING;
 
--- RLS POLICIES FOR STORAGE BUCKET: Allow authenticated users to upload/read/delete their own chat files
--- These assume the bucket follows naming convention: chat-files or uses env variable CHAT_BUCKET_NAME
+-- RLS POLICIES FOR STORAGE BUCKET: Allow chat participants to upload/read/delete files
+-- Path format: chat/{chat_id}/{type}/{timestamp}-{filename}
 
--- Policy: Allow authenticated users to upload files
--- Files are organized as: chat/{chat_id}/{type}/{timestamp}-{filename}
-CREATE POLICY IF NOT EXISTS "Allow authenticated users to upload chat files"
+DROP POLICY IF EXISTS "Allow users to read chat files" ON storage.objects;
+DROP POLICY IF EXISTS "Allow users to delete their own chat files" ON storage.objects;
+DROP POLICY IF EXISTS "Allow authenticated users to upload chat files" ON storage.objects;
+DROP POLICY IF EXISTS "Allow chat participants to read chat files" ON storage.objects;
+DROP POLICY IF EXISTS "Allow chat participants to upload chat files" ON storage.objects;
+DROP POLICY IF EXISTS "Allow chat participants to delete chat files" ON storage.objects;
+
+-- Policy: Allow chat participants to upload files
+CREATE POLICY "Allow chat participants to upload chat files"
   ON storage.objects
   FOR INSERT
   WITH CHECK (
     bucket_id IN (SELECT id FROM storage.buckets WHERE name LIKE 'chat%')
-    AND auth.role() = 'authenticated'
+    AND (
+      auth.jwt() ->> 'role' = 'service_role'
+      OR EXISTS (
+        SELECT 1
+        FROM public.chats c
+        JOIN public.users u ON u.auth_id = auth.uid()
+        WHERE c.id::text = split_part(storage.objects.name, '/', 2)
+          AND (c.participant_1_id = u.id OR c.participant_2_id = u.id)
+      )
+    )
   );
 
--- Policy: Allow users to view their own chat files (based on chat participation)
--- This is a simplified version; in production, add more granular checks
-CREATE POLICY IF NOT EXISTS "Allow users to read chat files"
+-- Policy: Allow chat participants to view their chat files
+CREATE POLICY "Allow chat participants to read chat files"
   ON storage.objects
   FOR SELECT
   USING (
     bucket_id IN (SELECT id FROM storage.buckets WHERE name LIKE 'chat%')
-    AND auth.role() = 'authenticated'
+    AND (
+      auth.jwt() ->> 'role' = 'service_role'
+      OR EXISTS (
+        SELECT 1
+        FROM public.chats c
+        JOIN public.users u ON u.auth_id = auth.uid()
+        WHERE c.id::text = split_part(storage.objects.name, '/', 2)
+          AND (c.participant_1_id = u.id OR c.participant_2_id = u.id)
+      )
+    )
   );
 
--- Policy: Allow users to delete their own chat files
-CREATE POLICY IF NOT EXISTS "Allow users to delete their own chat files"
+-- Policy: Allow chat participants to delete their chat files
+CREATE POLICY "Allow chat participants to delete chat files"
   ON storage.objects
   FOR DELETE
   USING (
     bucket_id IN (SELECT id FROM storage.buckets WHERE name LIKE 'chat%')
-    AND auth.role() = 'authenticated'
+    AND (
+      auth.jwt() ->> 'role' = 'service_role'
+      OR EXISTS (
+        SELECT 1
+        FROM public.chats c
+        JOIN public.users u ON u.auth_id = auth.uid()
+        WHERE c.id::text = split_part(storage.objects.name, '/', 2)
+          AND (c.participant_1_id = u.id OR c.participant_2_id = u.id)
+      )
+    )
   );
 
 -- RLS for storage.buckets (allow public read if bucket is public)

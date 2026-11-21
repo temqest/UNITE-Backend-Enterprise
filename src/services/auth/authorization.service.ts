@@ -20,6 +20,21 @@ export interface ResolvedAuthz {
   permissions: string[];
 }
 
+const authzCache = new Map<string, { expiresAt: number; data: ResolvedAuthz }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+export function clearAuthzCache(userId?: string): void {
+  if (userId) {
+    for (const key of authzCache.keys()) {
+      if (key.startsWith(`${userId}:`)) {
+        authzCache.delete(key);
+      }
+    }
+  } else {
+    authzCache.clear();
+  }
+}
+
 function dedupePermissions(values: string[]): string[] {
   return Array.from(new Set(values.map(normalizePermission).filter(Boolean)));
 }
@@ -36,6 +51,19 @@ export function getFallbackPermissions(user: AuthzUser): string[] {
   return dedupePermissions([...roleDefaults, ...stored]);
 }
 
+function cacheAndReturn(cacheKey: string, result: ResolvedAuthz): ResolvedAuthz {
+  const now = Date.now();
+  if (authzCache.size > 500) {
+    for (const [k, v] of authzCache.entries()) {
+      if (v.expiresAt <= now) {
+        authzCache.delete(k);
+      }
+    }
+  }
+  authzCache.set(cacheKey, { expiresAt: now + CACHE_TTL_MS, data: result });
+  return result;
+}
+
 export async function resolveUserAuthorization(user: AuthzUser): Promise<ResolvedAuthz> {
   const canonicalRole = resolveCanonicalRole(user.role?.type);
 
@@ -45,6 +73,13 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
 
   if (canonicalRole === 'super_admin') {
     return { role: canonicalRole, permissions: ['*'] };
+  }
+
+  const cacheKey = `${user.id}:${user.org_id ?? ''}:${user.role?.type ?? ''}`;
+  const now = Date.now();
+  const cached = authzCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
   }
 
   try {
@@ -61,10 +96,10 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
     const { data: assignments, error: assignmentsError } = await scopedAssignments;
 
     if (assignmentsError || !assignments || assignments.length === 0) {
-      return {
+      return cacheAndReturn(cacheKey, {
         role: canonicalRole,
         permissions: getFallbackPermissions(user),
-      };
+      });
     }
 
     const roleIds = assignments
@@ -72,10 +107,10 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
       .filter((roleId: unknown): roleId is string => typeof roleId === 'string' && roleId.length > 0);
 
     if (roleIds.length === 0) {
-      return {
+      return cacheAndReturn(cacheKey, {
         role: canonicalRole,
         permissions: getFallbackPermissions(user),
-      };
+      });
     }
 
     const { data: rolePermissions, error: rolePermissionsError } = await supabaseServer
@@ -84,10 +119,10 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
       .in('role_id', roleIds);
 
     if (rolePermissionsError || !rolePermissions || rolePermissions.length === 0) {
-      return {
+      return cacheAndReturn(cacheKey, {
         role: canonicalRole,
         permissions: getFallbackPermissions(user),
-      };
+      });
     }
 
     const permissionIds = rolePermissions
@@ -95,38 +130,44 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
       .filter((permissionId: unknown): permissionId is string => typeof permissionId === 'string' && permissionId.length > 0);
 
     if (permissionIds.length === 0) {
-      return {
+      return cacheAndReturn(cacheKey, {
         role: canonicalRole,
         permissions: getFallbackPermissions(user),
-      };
+      });
     }
 
-    const { data: permissionsRows, error: permissionsError } = await supabaseServer
+    const { data: permissions, error: permissionsError } = await supabaseServer
       .from('permissions')
       .select('name')
       .in('id', permissionIds);
 
-    if (permissionsError || !permissionsRows) {
-      return {
+    if (permissionsError || !permissions || permissions.length === 0) {
+      return cacheAndReturn(cacheKey, {
         role: canonicalRole,
         permissions: getFallbackPermissions(user),
-      };
+      });
     }
 
-    const tablePermissions = permissionsRows
-      .map((row: any) => row.name)
-      .filter((name: unknown): name is string => typeof name === 'string' && name.length > 0);
+    const tablePermissions = permissions
+      .map((row: any) => normalizePermission(row.name))
+      .filter((permission: string): permission is string => permission.length > 0);
 
-    const { data: overridesRows } = await supabaseServer
+    const overridesQuery = supabaseServer
       .from('user_permission_overrides')
       .select('permission_name, is_allowed')
-      .eq('user_id', user.id)
-      .or(user.org_id ? `org_id.eq.${user.org_id},org_id.is.null` : 'org_id.is.null');
+      .eq('user_id', user.id);
+
+    const scopedOverrides = user.org_id
+      ? overridesQuery.or(`org_id.eq.${user.org_id},org_id.is.null`)
+      : overridesQuery;
+
+    const { data: overrides } = await scopedOverrides;
 
     const allowOverrides: string[] = [];
     const denyOverrides: string[] = [];
-    for (const row of (overridesRows ?? []) as Array<{ permission_name?: unknown; is_allowed?: unknown }>) {
-      if (typeof row.permission_name !== 'string') {
+
+    for (const row of (overrides ?? []) as any[]) {
+      if (!row || typeof row.permission_name !== 'string') {
         continue;
       }
       const normalized = normalizePermission(row.permission_name);
@@ -144,15 +185,15 @@ export async function resolveUserAuthorization(user: AuthzUser): Promise<Resolve
     const deniedSet = new Set(denyOverrides);
     const effective = merged.filter((permission) => !deniedSet.has(permission));
 
-    return {
+    return cacheAndReturn(cacheKey, {
       role: canonicalRole,
       permissions: effective,
-    };
+    });
   } catch {
-    return {
+    return cacheAndReturn(cacheKey, {
       role: canonicalRole,
       permissions: getFallbackPermissions(user),
-    };
+    });
   }
 }
 

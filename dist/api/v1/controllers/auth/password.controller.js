@@ -57,6 +57,29 @@ async function changePasswordController(req, res) {
             return;
         }
         const authUserId = req.user.auth_id ?? req.user.id;
+        const { data: authUserData } = await supabase_client_1.supabaseServer.auth.admin.getUserById(authUserId);
+        const userEmail = authUserData?.user?.email;
+        const isForceChange = authUserData?.user?.user_metadata?.force_password_change === true;
+        if (!validation.data.currentPassword && !isForceChange) {
+            sendError(res, 400, {
+                code: 'CURRENT_PASSWORD_REQUIRED',
+                message: 'Current password is required to change password.',
+            });
+            return;
+        }
+        if (validation.data.currentPassword && userEmail) {
+            const { error: signInError } = await supabase_client_1.supabaseServer.auth.signInWithPassword({
+                email: userEmail,
+                password: validation.data.currentPassword,
+            });
+            if (signInError) {
+                sendError(res, 401, {
+                    code: 'INVALID_CURRENT_PASSWORD',
+                    message: 'The current password provided is incorrect.',
+                });
+                return;
+            }
+        }
         const updateResult = await supabase_client_1.supabaseServer.auth.admin.updateUserById(authUserId, {
             password: validation.data.newPassword,
             user_metadata: {

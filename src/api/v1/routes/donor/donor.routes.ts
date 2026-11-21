@@ -10,11 +10,12 @@ import {
 } from '../../controllers/donor/donor.controller';
 import { authMiddleware } from '../../../../middelware/auth.middleware';
 import { requireActiveUser } from '../../../../middelware/authorization.middleware';
+import { authSignupRateLimiter } from '../../../../middelware/rate-limit.middleware';
 import { asyncHandler } from '../../../../lib/async-handler';
 
 const donorRouter = Router();
 
-donorRouter.post('/signup', asyncHandler(donorSignupController as any));
+donorRouter.post('/signup', authSignupRateLimiter, asyncHandler(donorSignupController as any));
 donorRouter.get('/events', asyncHandler(listPublicDonorEventsController as any));
 donorRouter.post('/activate', authMiddleware, requireActiveUser, asyncHandler(activateDonorAccountController as any));
 donorRouter.get('/dashboard', authMiddleware, requireActiveUser, asyncHandler(getDonorDashboardController as any));

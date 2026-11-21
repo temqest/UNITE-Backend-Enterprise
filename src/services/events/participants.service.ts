@@ -171,11 +171,16 @@ export class EventParticipantsService {
       let data, error;
 
       if (existingData) {
+        if (['donated', 'participated', 'attended', 'completed'].includes(existingData.status)) {
+          return { data: existingData as EventParticipantRow, error: null };
+        }
+
+        const nextStatus = existingData.status === 'approved' ? 'approved' : 'applied';
         const res = await this.supabase
           .from('event_participants')
           .update({
-            status: 'applied',
-            notes: parsed.notes ?? null,
+            status: nextStatus,
+            notes: parsed.notes ?? existingData.notes ?? null,
           })
           .eq('id', existingData.id)
           .select('*')

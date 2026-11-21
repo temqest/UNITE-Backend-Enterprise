@@ -4,30 +4,6 @@ const app = require('./index');
 const PORT = Number(process.env.PORT) || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-const createRequestLogger = () => {
-  return (req, res, next) => {
-    const startedAt = process.hrtime.bigint();
-    const incomingRequestId = typeof req.headers['x-request-id'] === 'string' ? req.headers['x-request-id'].trim() : '';
-    const requestId = incomingRequestId || Math.random().toString(36).slice(2, 8);
-
-    req.headers['x-request-id'] = requestId;
-    res.setHeader('x-request-id', requestId);
-
-    console.log(`[request:${requestId}] -> ${req.method} ${req.originalUrl || req.url}`);
-
-    res.on('finish', () => {
-      const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-      console.log(
-        `[request:${requestId}] <- ${res.statusCode} ${req.method} ${req.originalUrl || req.url} (${elapsedMs.toFixed(1)}ms)`
-      );
-    });
-
-    next();
-  };
-};
-
-app.use(createRequestLogger());
-
 const server = http.createServer(app);
 
 const readEnv = (name) => {

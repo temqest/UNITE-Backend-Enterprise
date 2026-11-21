@@ -2,6 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlottingCalendarShareService = void 0;
 const zod_1 = require("zod");
+const crypto_1 = require("crypto");
+function safeCompareCodes(a, b) {
+    if (!a || !b)
+        return false;
+    const normA = Buffer.from(a.trim().toUpperCase());
+    const normB = Buffer.from(b.trim().toUpperCase());
+    if (normA.length !== normB.length)
+        return false;
+    return (0, crypto_1.timingSafeEqual)(normA, normB);
+}
 const event_types_1 = require("./event.types");
 const event_service_1 = require("./event.service");
 const plotting_calendar_service_1 = require("./plotting-calendar.service");
@@ -137,7 +147,7 @@ class PlottingCalendarShareService {
                 // Let's assume we still return success.
                 return { data: { success: true, calendar: calendarResult.data }, error: null };
             }
-            if (parsed.access_code.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+            if (!safeCompareCodes(parsed.access_code, calendar.public_access_code)) {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
@@ -165,7 +175,7 @@ class PlottingCalendarShareService {
                     error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to view availability.'),
                 };
             }
-            if (accessCode.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+            if (!safeCompareCodes(accessCode, calendar.public_access_code)) {
                 return {
                     data: null,
                     error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
@@ -198,7 +208,7 @@ class PlottingCalendarShareService {
                         error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to plot events.'),
                     };
                 }
-                if (String(payloadAccessCode).trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+                if (!safeCompareCodes(String(payloadAccessCode), calendar.public_access_code)) {
                     return {
                         data: null,
                         error: (0, event_types_1.toServiceError)('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),

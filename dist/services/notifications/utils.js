@@ -48,6 +48,13 @@ function checkLimits(params) {
     const today = toDateBucket();
     const current = dailyCounter.get(key);
     if (!current || current.day !== today) {
+        if (dailyCounter.size > 200) {
+            for (const [k, v] of dailyCounter.entries()) {
+                if (v.day !== today) {
+                    dailyCounter.delete(k);
+                }
+            }
+        }
         dailyCounter.set(key, { day: today, count: 0 });
         return { allowed: true, queued: false, merged: false };
     }

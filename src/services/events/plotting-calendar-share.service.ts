@@ -1,6 +1,14 @@
 import { z } from 'zod';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+function safeCompareCodes(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const normA = Buffer.from(a.trim().toUpperCase());
+  const normB = Buffer.from(b.trim().toUpperCase());
+  if (normA.length !== normB.length) return false;
+  return timingSafeEqual(normA, normB);
+}
 import type { EventActorContext, ServiceResult } from './event.types';
 import { toServiceError } from './event.types';
 import { EventService } from './event.service';
@@ -158,7 +166,7 @@ export class PlottingCalendarShareService {
         return { data: { success: true, calendar: calendarResult.data }, error: null };
       }
       
-      if (parsed.access_code.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+      if (!safeCompareCodes(parsed.access_code, calendar.public_access_code)) {
         return {
           data: null,
           error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
@@ -188,7 +196,7 @@ export class PlottingCalendarShareService {
           error: toServiceError('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to view availability.'),
         };
       }
-      if (accessCode.trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+      if (!safeCompareCodes(accessCode, calendar.public_access_code)) {
         return {
           data: null,
           error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),
@@ -226,7 +234,7 @@ export class PlottingCalendarShareService {
             error: toServiceError('PLOTTING_CALENDAR_ACCESS_CODE_REQUIRED', 'Access code is required to plot events.'),
           };
         }
-        if (String(payloadAccessCode).trim().toUpperCase() !== calendar.public_access_code.trim().toUpperCase()) {
+        if (!safeCompareCodes(String(payloadAccessCode), calendar.public_access_code)) {
           return {
             data: null,
             error: toServiceError('PLOTTING_CALENDAR_INVALID_ACCESS_CODE', 'Invalid link or access code. Please check and try again.'),

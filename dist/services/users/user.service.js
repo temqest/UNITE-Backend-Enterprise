@@ -21,7 +21,7 @@ const AdminSignupSchema = zod_1.z.object({
     }),
     admin: zod_1.z.object({
         email: zod_1.z.string().email(),
-        password: zod_1.z.string().min(8).max(128),
+        password: zod_1.z.string().min(6).max(128),
         first_name: zod_1.z.string().trim().min(1),
         last_name: zod_1.z.string().trim().min(1),
         geographic_area: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional().nullable(),
@@ -35,7 +35,7 @@ const StaffSelfSignupSchema = zod_1.z.object({
         .max(32)
         .regex(/^[A-Z0-9_-]+$/),
     email: zod_1.z.string().email(),
-    password: zod_1.z.string().min(8).max(128),
+    password: zod_1.z.string().min(6).max(128),
     first_name: zod_1.z.string().trim().min(1),
     last_name: zod_1.z.string().trim().min(1),
     geographic_area: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional().nullable(),
@@ -325,6 +325,7 @@ class UserService {
             .select('id, expires_at')
             .single();
         if (error || !data) {
+            console.error('PENDING SIGNUP ERROR:', error);
             return {
                 data: null,
                 error: toServiceError('PENDING_SIGNUP_CREATE_FAILED', 'Failed to stage signup data for verification.', error),
@@ -590,6 +591,89 @@ class UserService {
                 data: null,
                 error: toServiceError('STAFF_SIGNUP_VALIDATION_ERROR', 'Invalid staff signup payload.', error),
             };
+        }
+    }
+    async donorSelfSignup(input) {
+        try {
+            const parsed = zod_1.z.object({
+                email: zod_1.z.string().email(),
+                password: zod_1.z.string().min(6).max(128),
+                first_name: zod_1.z.string().trim().min(1),
+                last_name: zod_1.z.string().trim().min(1),
+                geographic_area: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional().nullable(),
+            }).parse(input);
+            const authResult = await this.createSignupAuthUser({
+                email: parsed.email,
+                password: parsed.password,
+                user_metadata: {
+                    role: 'donor',
+                    signup_source: 'donor_signup',
+                    first_name: parsed.first_name,
+                    last_name: parsed.last_name,
+                    geographic_area: parsed.geographic_area ?? null,
+                },
+            });
+            if (authResult.error || !authResult.data) {
+                return {
+                    data: null,
+                    error: authResult.error ?? toServiceError('AUTH_SIGNUP_FAILED', 'Failed to create donor auth account.'),
+                };
+            }
+            const existingProfile = await this.getUserByAuthIdOptional(authResult.data.id);
+            if (existingProfile.error)
+                return { data: null, error: existingProfile.error };
+            if (existingProfile.data) {
+                return { data: null, error: toServiceError('ACCOUNT_ALREADY_EXISTS', 'Account exists.') };
+            }
+            const { data: defaultOrgs, error: defaultOrgError } = await this.supabase
+                .from('organizations')
+                .select('id')
+                .eq('is_active', true)
+                .limit(1);
+            const defaultOrgId = defaultOrgs?.[0]?.id;
+            if (!defaultOrgId) {
+                return { data: null, error: toServiceError('ORG_MISSING', 'System error: No active organization available for donor assignment.') };
+            }
+            const pendingSignupResult = await this.createPendingSignup({
+                auth_user_id: authResult.data.id,
+                email: parsed.email,
+                signup_type: 'donor',
+                role: 'donor',
+                org_id: defaultOrgId,
+                profile_payload: {
+                    first_name: parsed.first_name,
+                    last_name: parsed.last_name,
+                    geographic_area: parsed.geographic_area ?? null,
+                    is_active: true, // Donors don't need manual approval like staff
+                    role: { type: 'donor', permissions: [] }
+                },
+            });
+            if (pendingSignupResult.error) {
+                await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+                return { data: null, error: pendingSignupResult.error };
+            }
+            try {
+                const verifyResult = await (0, send_verification_code_service_1.sendVerificationCode)({
+                    email: parsed.email,
+                    authUserId: authResult.data.id,
+                    firstName: parsed.first_name,
+                });
+                if (!verifyResult.success) {
+                    await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+                    return { data: null, error: toServiceError('VERIFICATION_EMAIL_FAILED', 'Failed.') };
+                }
+            }
+            catch (emailError) {
+                await this.cleanupSignupArtifacts(authResult.data.id, parsed.email);
+                return { data: null, error: toServiceError('VERIFICATION_EMAIL_FAILED', 'Failed to send email.') };
+            }
+            return {
+                data: { auth_user_id: authResult.data.id, pending_verification: true },
+                error: null,
+            };
+        }
+        catch (error) {
+            return { data: null, error: toServiceError('DONOR_SIGNUP_VALIDATION_ERROR', 'Invalid payload', error) };
         }
     }
     async adminCreateStaff(input) {

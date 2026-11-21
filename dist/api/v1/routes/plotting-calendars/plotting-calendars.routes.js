@@ -7,13 +7,28 @@ const auth_middleware_1 = require("../../../../middelware/auth.middleware");
 const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
 const async_handler_1 = require("../../../../lib/async-handler");
 const plotting_calendars_share_routes_1 = require("./plotting-calendars-share.routes");
+const forbidRoles = (roles) => {
+    return (req, res, next) => {
+        if (req.user?.role?.type && roles.includes(req.user.role.type)) {
+            res.status(403).json({
+                success: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Access denied for your role.',
+                },
+            });
+            return;
+        }
+        next();
+    };
+};
 const plottingCalendarsRouter = (0, express_1.Router)();
 exports.plottingCalendarsRouter = plottingCalendarsRouter;
 // Mount public share routes
 plottingCalendarsRouter.use('/share', plotting_calendars_share_routes_1.plottingCalendarsShareRouter);
 plottingCalendarsRouter.get('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.listPlottingCalendarsController));
 plottingCalendarsRouter.get('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.read'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.getPlottingCalendarController));
-plottingCalendarsRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.createPlottingCalendarController));
+plottingCalendarsRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.create'), forbidRoles(['stakeholder', 'volunteer']), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.createPlottingCalendarController));
 plottingCalendarsRouter.patch('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.updatePlottingCalendarController));
 plottingCalendarsRouter.post('/:id/regenerate-access-code', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.update'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.regeneratePlottingCalendarAccessCodeController));
 plottingCalendarsRouter.delete('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('events.delete'), (0, async_handler_1.asyncHandler)(plotting_calendar_controller_1.deletePlottingCalendarController));

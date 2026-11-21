@@ -17,6 +17,7 @@ const signup_controller_1 = require("../../controllers/users/signup.controller")
 const users_1 = require("../../validators/users");
 const auth_middleware_1 = require("../../../../middelware/auth.middleware");
 const authorization_middleware_1 = require("../../../../middelware/authorization.middleware");
+const rate_limit_middleware_1 = require("../../../../middelware/rate-limit.middleware");
 const validate_middleware_1 = require("../../../../middelware/validate.middleware");
 const async_handler_1 = require("../../../../lib/async-handler");
 function toValidator(validateFn) {
@@ -58,12 +59,16 @@ const profilePictureRateLimiter = (0, express_rate_limit_1.default)({
         },
     },
 });
-usersRouter.post('/signup', (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateSignup)), async (req, res, next) => {
+usersRouter.post('/signup', rate_limit_middleware_1.authSignupRateLimiter, (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateSignup)), async (req, res, next) => {
     try {
         const role = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
         const hasOrganization = Boolean(req.body?.organization);
         if (role === 'admin' || hasOrganization) {
             await (0, signup_controller_1.signupAdminController)(req, res);
+            return;
+        }
+        if (role === 'donor') {
+            await (0, signup_controller_1.signupDonorController)(req, res);
             return;
         }
         await (0, signup_controller_1.signupStaffController)(req, res);
@@ -72,14 +77,14 @@ usersRouter.post('/signup', (0, validate_middleware_1.validateMiddleware)(toVali
         next(error);
     }
 });
-usersRouter.get('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.read'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateGetProfile)), (0, async_handler_1.asyncHandler)(profile_controller_1.getProfileController));
-usersRouter.patch('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.read'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateProfileUpdate)), (0, async_handler_1.asyncHandler)(profile_controller_1.updateProfileController));
+usersRouter.get('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateGetProfile)), (0, async_handler_1.asyncHandler)(profile_controller_1.getProfileController));
+usersRouter.patch('/profile', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateProfileUpdate)), (0, async_handler_1.asyncHandler)(profile_controller_1.updateProfileController));
 usersRouter.post('/approve-staff', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.approve'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateStaffApproval)), (0, async_handler_1.asyncHandler)(approval_controller_1.approveStaffController));
 usersRouter.patch('/settings', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('settings.update'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateSettingsUpdate)), (0, async_handler_1.asyncHandler)(settings_controller_1.updateUserSettingsController));
 usersRouter.get('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('staff.read'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateStaffListQuery), 'query'), (0, async_handler_1.asyncHandler)(staff_management_controller_1.listStaffController));
 usersRouter.post('/', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.invite'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateStaffCreate)), (0, async_handler_1.asyncHandler)(staff_management_controller_1.createStaffManagementController));
-usersRouter.get('/:id/detail', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('staff.read'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, async_handler_1.asyncHandler)(staff_detail_controller_1.getStaffDetailController));
-usersRouter.patch('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.invite'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateStaffUpdate)), (0, async_handler_1.asyncHandler)(staff_management_controller_1.updateStaffManagementController));
+usersRouter.get('/:id/detail', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorizeOrSelf)('staff.read'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, async_handler_1.asyncHandler)(staff_detail_controller_1.getStaffDetailController));
+usersRouter.patch('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorizeOrSelf)('users.invite'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateStaffUpdate)), (0, async_handler_1.asyncHandler)(staff_management_controller_1.updateStaffManagementController));
 usersRouter.delete('/:id', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, authorization_middleware_1.authorize)('users.invite'), (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, async_handler_1.asyncHandler)(staff_management_controller_1.deleteStaffManagementController));
 usersRouter.post('/:id/profile-picture', profilePictureRateLimiter, auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), upload.single('profile_picture'), (0, async_handler_1.asyncHandler)(profile_picture_controller_1.uploadProfilePictureController));
 usersRouter.delete('/:id/profile-picture', auth_middleware_1.authMiddleware, authorization_middleware_1.requireActiveUser, authorization_middleware_1.requireOrgScope, (0, validate_middleware_1.validateMiddleware)(toValidator(users_1.validateUserIdParam), 'params'), (0, async_handler_1.asyncHandler)(profile_picture_controller_1.deleteProfilePictureController));

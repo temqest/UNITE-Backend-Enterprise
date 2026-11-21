@@ -29,9 +29,12 @@ class EventValidationService {
         if (!settings) {
             return { data: true, error: null };
         }
-        const eventDate = new Date(`${payload.event_date}T00:00:00.000Z`);
-        const now = new Date();
-        const daysDiff = Math.floor((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const today = new Date();
+        const todayMidnightUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+        const [evYear, evMonth, evDay] = payload.event_date.split('-').map(Number);
+        const eventMidnightUtc = Date.UTC(evYear, evMonth - 1, evDay);
+        const daysDiff = Math.round((eventMidnightUtc - todayMidnightUtc) / (1000 * 60 * 60 * 24));
+        const eventDate = new Date(eventMidnightUtc);
         if (daysDiff < settings.event_request_advance_days) {
             return {
                 data: null,

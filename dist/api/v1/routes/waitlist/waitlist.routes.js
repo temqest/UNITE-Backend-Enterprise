@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.waitlistRouter = void 0;
+const express_1 = require("express");
+const waitlist_controller_1 = require("../../controllers/waitlist/waitlist.controller");
+const rate_limit_middleware_1 = require("../../../../middelware/rate-limit.middleware");
+const router = (0, express_1.Router)();
+exports.waitlistRouter = router;
+router.post('/', rate_limit_middleware_1.publicFormRateLimiter, waitlist_controller_1.joinWaitlistController);
+exports.default = router;

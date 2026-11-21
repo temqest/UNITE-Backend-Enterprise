@@ -369,9 +369,14 @@ Side effects:
 ### 4.2 Full Approval Workflow (request -> reviewer -> accept/reject/reschedule)
 Core approval endpoint set:
 
-- POST /api/v1/events/:id/approve
-- POST /api/v1/events/:id/reject
-- POST /api/v1/events/:id/reschedule
+> [!NOTE]
+> **Deprecated Workflow:** The endpoints below (`/approve`, `/reject`, `/reschedule`) are officially deprecated and return `EVENT_WORKFLOW_DEPRECATED`. The active event lifecycle uses `POST /events/:id/complete-details` and `POST /events/:id/publish` via `EventOperationsService`.
+
+- POST /api/v1/events/:id/approve (Deprecated)
+- POST /api/v1/events/:id/reject (Deprecated)
+- POST /api/v1/events/:id/reschedule (Deprecated)
+- POST /api/v1/events/:id/complete-details (Active)
+- POST /api/v1/events/:id/publish (Active)
 
 Approval service behavior:
 

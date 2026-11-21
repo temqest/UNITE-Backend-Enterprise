@@ -182,24 +182,35 @@ class AnalyticsService {
         };
     }
     async getCollectionPerformance(orgId, filters) {
-        const { data: events } = await supabase_client_1.supabaseAdmin
+        let dbQuery = supabase_client_1.supabaseAdmin
             .from('events')
             .select('event_date, actual_collected_bags')
             .eq('org_id', orgId)
             .eq('status', 'completed')
             .order('event_date', { ascending: true });
-        const monthly = {};
+        if (filters?.year) {
+            dbQuery = dbQuery
+                .gte('event_date', `${filters.year}-01-01`)
+                .lte('event_date', `${filters.year}-12-31`);
+        }
+        const { data: events } = await dbQuery;
+        const monthly = new Map();
         (events || []).forEach((e) => {
             if (!e.event_date)
                 return;
             const d = new Date(e.event_date);
-            const month = d.toLocaleString('default', { month: 'short' });
-            if (!monthly[month])
-                monthly[month] = { units: 0, completed_events: 0 };
-            monthly[month].units += (e.actual_collected_bags || 0);
-            monthly[month].completed_events += 1;
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const monthLabel = d.toLocaleString('default', { month: 'short' });
+            const current = monthly.get(key) || { month: monthLabel, units: 0, completed_events: 0 };
+            current.units += (e.actual_collected_bags || 0);
+            current.completed_events += 1;
+            monthly.set(key, current);
         });
-        const monthly_collections = Object.entries(monthly).map(([month, stats]) => ({ month, units: stats.units, completed_events: stats.completed_events }));
+        const sortedKeys = Array.from(monthly.keys()).sort();
+        const monthly_collections = sortedKeys.map((key) => {
+            const stats = monthly.get(key);
+            return { month: stats.month, units: stats.units, completed_events: stats.completed_events };
+        });
         let topMonth = { month: 'N/A', units: 0, completed_events: 0 };
         monthly_collections.forEach((m) => {
             if (m.units > topMonth.units)
@@ -252,24 +263,29 @@ class AnalyticsService {
             .select('direction, quantity, created_at')
             .eq('org_id', orgId)
             .gte('created_at', sixMonthsAgo.toISOString());
-        const monthlyMovement = {};
+        const monthlyMovement = new Map();
         (transactions || []).forEach((t) => {
             const d = new Date(t.created_at);
-            const month = d.toLocaleString('default', { month: 'short' });
-            if (!monthlyMovement[month])
-                monthlyMovement[month] = { added: 0, used: 0 };
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const monthLabel = d.toLocaleString('default', { month: 'short' });
+            const current = monthlyMovement.get(key) || { month: monthLabel, added: 0, used: 0 };
             if (t.direction === 'in') {
-                monthlyMovement[month].added += t.quantity;
+                current.added += t.quantity;
             }
             else {
-                monthlyMovement[month].used += t.quantity;
+                current.used += t.quantity;
             }
+            monthlyMovement.set(key, current);
         });
-        const movementTrend = Object.entries(monthlyMovement).map(([month, stats]) => ({
-            month,
-            added: stats.added,
-            used: stats.used
-        }));
+        const sortedMovementKeys = Array.from(monthlyMovement.keys()).sort();
+        const movementTrend = sortedMovementKeys.map((key) => {
+            const stats = monthlyMovement.get(key);
+            return {
+                month: stats.month,
+                added: stats.added,
+                used: stats.used,
+            };
+        });
         return {
             current_stock: currentStock,
             low_stock_blood_types: lowStock,

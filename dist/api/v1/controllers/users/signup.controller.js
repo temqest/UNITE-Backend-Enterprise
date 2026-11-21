@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.signupAdminController = signupAdminController;
 exports.signupStaffController = signupStaffController;
+exports.signupDonorController = signupDonorController;
 exports.createStaffController = createStaffController;
 const supabase_client_1 = require("../../../../lib/supabase/supabase.client");
 const user_service_1 = require("../../../../services/users/user.service");
@@ -135,6 +136,54 @@ async function signupStaffController(req, res) {
         sendError(res, 500, {
             code: err.code ?? 'STAFF_SIGNUP_ERROR',
             message: err.message ?? 'Unexpected error during staff signup.',
+            details: err.details,
+        });
+    }
+}
+async function signupDonorController(req, res) {
+    try {
+        const body = req.body ?? {};
+        const baseValidation = (0, users_1.validateSignup)(body);
+        if (!baseValidation.success) {
+            sendError(res, 400, {
+                code: 'VALIDATION_ERROR',
+                message: 'Invalid donor signup payload.',
+                details: baseValidation.error,
+            });
+            return;
+        }
+        const signupData = baseValidation.data;
+        if (!signupData) {
+            sendError(res, 400, {
+                code: 'VALIDATION_ERROR',
+                message: 'Invalid donor signup payload.',
+            });
+            return;
+        }
+        const result = await userService.donorSelfSignup({
+            email: signupData.email,
+            password: signupData.password,
+            first_name: signupData.firstName,
+            last_name: signupData.lastName,
+            geographic_area: body.geographic_area && typeof body.geographic_area === 'object'
+                ? body.geographic_area
+                : undefined,
+        });
+        if (result.error || !result.data) {
+            sendError(res, 400, {
+                code: result.error?.code ?? 'DONOR_SIGNUP_FAILED',
+                message: result.error?.message ?? 'Failed to create donor account.',
+                details: result.error?.details,
+            });
+            return;
+        }
+        res.status(201).json({ success: true, data: result.data });
+    }
+    catch (error) {
+        const err = error;
+        sendError(res, 500, {
+            code: err.code ?? 'DONOR_SIGNUP_ERROR',
+            message: err.message ?? 'Unexpected error during donor signup.',
             details: err.details,
         });
     }

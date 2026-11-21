@@ -437,9 +437,17 @@ class EventService {
                 };
             }
             const enriched = await this.enrichEvents([event]);
-            return enriched.error || !enriched.data?.[0]
-                ? { data: null, error: enriched.error }
-                : { data: enriched.data[0], error: null };
+            if (enriched.error || !enriched.data?.[0]) {
+                return { data: null, error: enriched.error };
+            }
+            const eventData = enriched.data[0];
+            const { count } = await this.supabase
+                .from('event_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('event_id', eventId);
+            eventData.applicants_count = count ?? 0;
+            eventData.is_joined = false;
+            return { data: eventData, error: null };
         }
         if (!this.canViewOrgEvent(actor, event)) {
             return {
@@ -448,9 +456,23 @@ class EventService {
             };
         }
         const enriched = await this.enrichEvents([event]);
-        return enriched.error || !enriched.data?.[0]
-            ? { data: null, error: enriched.error }
-            : { data: enriched.data[0], error: null };
+        if (enriched.error || !enriched.data?.[0]) {
+            return { data: null, error: enriched.error };
+        }
+        const eventData = enriched.data[0];
+        const { count } = await this.supabase
+            .from('event_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', eventId);
+        eventData.applicants_count = count ?? 0;
+        const { data: joined } = await this.supabase
+            .from('event_participants')
+            .select('id')
+            .eq('event_id', eventId)
+            .eq('participant_user_id', actor.id)
+            .maybeSingle();
+        eventData.is_joined = !!joined;
+        return { data: eventData, error: null };
     }
     async quickCreateEvent(actor, input) {
         try {

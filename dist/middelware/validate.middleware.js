@@ -1,44 +1,17 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validateMiddleware = validateMiddleware;
-function sendError(res, statusCode, error) {
-    res.status(statusCode).json({ success: false, error });
-}
-function validateMiddleware(validator, source = 'body') {
-    return (req, res, next) => {
-        try {
-            const payload = source === 'query'
-                ? (req.query ?? {})
-                : source === 'params'
-                    ? (req.params ?? {})
-                    : (req.body ?? {});
-            const result = validator.validate(payload);
-            if (!result.success) {
-                sendError(res, 400, {
-                    code: 'VALIDATION_ERROR',
-                    message: 'Request validation failed.',
-                    details: result.error,
-                });
-                return;
-            }
-            if (source === 'query') {
-                req.query = result.data;
-            }
-            else if (source === 'params') {
-                req.params = result.data;
-            }
-            else {
-                req.body = result.data;
-            }
-            next();
-        }
-        catch (error) {
-            sendError(res, 400, {
-                code: 'VALIDATION_ERROR',
-                message: 'Request validation failed.',
-                details: error,
-            });
-        }
-    };
-}
-exports.default = validateMiddleware;
+__exportStar(require("../middleware/validate.middleware"), exports);

@@ -100,7 +100,15 @@ class InventoryService {
         if (missingRows.length > 0) {
             await inventoryTable.insert(missingRows);
         }
-        baselineRowsEnsuredAtByOrg.set(orgId, Date.now());
+        const now = Date.now();
+        if (baselineRowsEnsuredAtByOrg.size > 100) {
+            for (const [k, timestamp] of baselineRowsEnsuredAtByOrg.entries()) {
+                if (now - timestamp > BASELINE_ROWS_TTL_MS) {
+                    baselineRowsEnsuredAtByOrg.delete(k);
+                }
+            }
+        }
+        baselineRowsEnsuredAtByOrg.set(orgId, now);
     }
     toCard(bloodType, rows) {
         const currentStock = rows.reduce((sum, row) => sum + Math.max(0, row.quantity ?? 0), 0);

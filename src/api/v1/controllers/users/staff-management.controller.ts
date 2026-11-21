@@ -364,11 +364,35 @@ export async function updateStaffManagementController(req: Request, res: Respons
 
     const incomingRole = normalizeOptionalText(body.role);
     if (incomingRole !== undefined) {
+      if (isSelf) {
+        sendError(res, 403, { code: 'CANNOT_MODIFY_OWN_ROLE', message: 'You cannot modify your own role.' });
+        return;
+      }
+      if (actorRole !== 'super_admin' && actorRole !== 'admin') {
+        sendError(res, 403, { code: 'FORBIDDEN', message: 'Only administrators can modify user roles.' });
+        return;
+      }
+      if (actorRole === 'admin' && (incomingRole === 'admin' || incomingRole === 'super_admin' || targetRole === 'admin')) {
+        sendError(res, 403, { code: 'FORBIDDEN', message: 'Admins cannot assign admin roles or modify other admins.' });
+        return;
+      }
       if (targetRole === 'super_admin') {
         sendError(res, 403, { code: 'CANNOT_MODIFY_SUPER_ADMIN_ROLE', message: 'Super admin role cannot be modified.' });
         return;
       }
       patch.role = buildRoleFromInput(incomingRole);
+    }
+
+    if (body.status !== undefined || body.is_active !== undefined) {
+      if (isSelf) {
+        sendError(res, 403, { code: 'CANNOT_MODIFY_OWN_STATUS', message: 'You cannot modify your own active status.' });
+        return;
+      }
+      if (actorRole !== 'super_admin' && actorRole !== 'admin') {
+        sendError(res, 403, { code: 'FORBIDDEN', message: 'Only administrators can modify user active status.' });
+        return;
+      }
+      patch.is_active = body.status === 'active' || body.is_active === true;
     }
 
     if (Object.prototype.hasOwnProperty.call(body, 'phone_number')) {
@@ -506,11 +530,22 @@ export async function deleteStaffManagementController(req: Request, res: Respons
       return;
     }
 
+    const actorRole = req.user.role?.type || '';
+    if (actorRole !== 'super_admin' && actorRole !== 'admin') {
+      sendError(res, 403, { code: 'FORBIDDEN', message: 'Only administrators can delete staff accounts.' });
+      return;
+    }
+
     const targetRoleObj = typeof targetUser.role === 'string' ? targetUser.role : (targetUser.role as { type?: string })?.type;
     const targetRole = String(targetRoleObj || '');
 
     if (targetRole === 'super_admin') {
       sendError(res, 403, { code: 'CANNOT_DELETE_SUPER_ADMIN', message: 'Super admin accounts cannot be deleted.' });
+      return;
+    }
+
+    if (actorRole === 'admin' && targetRole === 'admin') {
+      sendError(res, 403, { code: 'FORBIDDEN', message: 'Admins cannot delete other admin accounts.' });
       return;
     }
 
